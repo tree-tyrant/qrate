@@ -1,37 +1,62 @@
+
 import React from 'react';
-import iphoneMockup from 'figma:asset/03076d54d61a704e0ad299c6eb4f7fd25fad191a.png';
+import iphoneMockup from '../assets/iphonemock.png';
 
 interface PhoneMockupProps {
   children: React.ReactNode;
+  showQRCodeInfo?: boolean;
 }
 
-export function PhoneMockup({ children }: PhoneMockupProps) {
+export function PhoneMockup({ children, showQRCodeInfo = false }: PhoneMockupProps) {
   return (
-    <div className="min-h-screen flex items-center justify-center p-8 bg-background relative">
+    <div className="relative flex justify-center items-center bg-background p-4 min-h-screen overflow-hidden">
       {/* Desktop background decorations */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-10 left-10 w-2 h-2 bg-[var(--neon-pink)] rounded-full animate-pulse"></div>
-        <div className="absolute top-32 right-16 w-1 h-1 bg-[var(--neon-cyan)] rounded-full animate-pulse delay-700"></div>
-        <div className="absolute bottom-20 left-20 w-1.5 h-1.5 bg-[var(--neon-yellow)] rounded-full animate-pulse delay-1000"></div>
-        <div className="absolute bottom-40 right-32 w-1 h-1 bg-[var(--neon-purple)] rounded-full animate-pulse delay-300"></div>
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="top-10 left-10 absolute bg-[var(--neon-pink)] rounded-full w-2 h-2 animate-pulse"></div>
+        <div className="top-32 right-16 absolute bg-[var(--neon-cyan)] rounded-full w-1 h-1 animate-pulse delay-700"></div>
+        <div className="bottom-20 left-20 absolute bg-[var(--neon-yellow)] rounded-full w-1.5 h-1.5 animate-pulse delay-1000"></div>
+        <div className="right-32 bottom-40 absolute bg-[var(--neon-purple)] rounded-full w-1 h-1 animate-pulse delay-300"></div>
         
         {/* Large gradient orbs */}
-        <div className="absolute -top-32 -right-32 w-96 h-96 bg-gradient-to-br from-[var(--neon-purple)]/20 to-transparent rounded-full blur-3xl animate-float"></div>
-        <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-gradient-to-tr from-[var(--neon-cyan)]/20 to-transparent rounded-full blur-3xl animate-float" style={{animationDelay: '2s'}}></div>
+        <div className="-top-32 -right-32 absolute bg-gradient-to-br from-[var(--neon-purple)]/20 to-transparent blur-3xl rounded-full w-96 h-96 animate-float"></div>
+        <div className="-bottom-32 -left-32 absolute bg-gradient-to-tr from-[var(--neon-cyan)]/20 to-transparent blur-3xl rounded-full w-80 h-80 animate-float" style={{animationDelay: '2s'}}></div>
       </div>
       
+      {/* QR Code Info Text - shown on right side above the iPhone frame for event code entry */}
+      {showQRCodeInfo && (
+        <div className="z-10 absolute right-4 md:right-8 top-[5vh] max-w-xs hidden lg:block">
+          <p className="text-white/80 text-sm leading-relaxed">
+            Scanning the QR code takes guests directly to the event page, bypassing manual event code entry.
+          </p>
+        </div>
+      )}
+
+      {/* Text above iPhone frame on left side */}
+      <div className="z-10 absolute left-8 top-8">
+        <p className="text-white/80 text-sm">
+          this Iphone frame only displays on pc, just for demo purposes
+        </p>
+      </div>
+
       {/* iPhone mockup with content */}
-      <div className="relative z-10 w-full max-w-sm mx-auto">
-        {/* iPhone frame container */}
-        {/* Use padding-top for aspect ratio (852 / 393 = 2.1679) */}
-        <div className="relative w-full" style={{ paddingBottom: '100.79%' }}>
+      <div className="z-10 relative mx-auto flex items-center justify-center" style={{ 
+        width: 'min(24rem, 90vw)',
+        height: '95vh',
+        maxHeight: '95vh'
+      }}>
+        {/* iPhone frame container - scales to fit both width and height while maintaining aspect ratio */}
+        <div className="relative w-full h-full" style={{ 
+          aspectRatio: '393 / 852',
+          maxWidth: '100%',
+          maxHeight: '100%'
+        }}>
 
           {/* iPhone mockup image - overlay on top */}
           {/* This img will scale with its parent's width */}
           <img
             src={iphoneMockup}
             alt="iPhone Frame"
-            className="absolute inset-0 w-full h-full object-contain pointer-events-none z-10"
+            className="z-10 absolute inset-0 w-full h-full object-contain pointer-events-none"
           />
 
           {/* Content area - positioned to fit within the phone screen */}
@@ -49,22 +74,20 @@ export function PhoneMockup({ children }: PhoneMockupProps) {
               height: (800 / 852) * 100 = 93.90%
           */}
           <div
-            className="absolute rounded-[8%]"
+            className="absolute rounded-[8%] overflow-hidden"
             style={{
               top: '3.05%',
               left: '5.60%',
               width: '88.80%',
               height: '93.90%',
-              overflow: 'hidden'
             }}
           >
-            {/* Scrollable content wrapper with proper constraints */}
+            {/* Content wrapper - no scrolling, content should fit */}
             <div 
-              className="w-full h-full bg-background"
+              className="bg-background w-full h-full overflow-hidden"
               style={{
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                WebkitOverflowScrolling: 'touch'
+                maxWidth: '100%',
+                boxSizing: 'border-box'
               }}
             >
               {children}
