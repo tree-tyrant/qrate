@@ -16,81 +16,100 @@ export function transformSpotifyDataForPTS(spotifyUserData: any): TrackWithMetad
   const savedTrackIds = new Set(
     (spotifyUserData.saved_tracks || []).map((t: any) => t.id)
   );
+  const followedArtistIds = new Set(
+    (spotifyUserData.followed_artists || []).map((artist: any) => artist.id)
+  );
+  const userId = spotifyUserData.profile?.id || 'anonymous';
+  const seenTrackIds = new Set<string>();
   
   let currentRank = 1;
-  
-  // Priority 1: Short-term tracks (last 4 weeks) - Ranks 1-50
-  const shortTermTracks = spotifyUserData.top_tracks?.short_term || [];
-  shortTermTracks.slice(0, 50).forEach((track: any) => {
-    allTracks.push({
+
+  const normalizeAudioFeatures = (features: any | undefined) => {
+    if (!features) return undefined;
+    return {
+      tempo: features.tempo ?? null,
+      energy: features.energy ?? null,
+      danceability: features.danceability ?? null,
+      acousticness: features.acousticness ?? null,
+      instrumentalness: features.instrumentalness ?? null,
+      liveness: features.liveness ?? null,
+      loudness: features.loudness ?? null,
+      speechiness: features.speechiness ?? null,
+      valence: features.valence ?? null,
+      key: features.key ?? null,
+      mode: features.mode ?? null,
+      timeSignature: features.time_signature ?? features.timeSignature ?? null,
+      durationMs: features.duration_ms ?? features.durationMs ?? null
+    };
+  };
+
+  const collectGenres = (track: any): string[] => {
+    const direct = Array.isArray(track?.genres) ? track.genres : [];
+    const artistGenres = (track?.artists || [])
+      .flatMap((artist: any) => artist?.genres || [])
+      .filter(Boolean);
+    return Array.from(new Set([...direct, ...artistGenres]));
+  };
+
+  const addTrack = (track: any, timeframe: 'short_term' | 'medium_term' | 'long_term') => {
+    if (!track || !track.id || seenTrackIds.has(track.id)) {
+      return;
+    }
+
+    const rawAudioFeatures = track.audioFeatures || track.audio_features;
+    const audioFeatures = normalizeAudioFeatures(rawAudioFeatures);
+    const genres = collectGenres(track);
+    const releaseDate = track.release_date || track.album?.release_date;
+    const explicit = Boolean(track.explicit);
+    const isFollowedArtist = (track.artists || []).some(
+      (artist: any) => artist?.id && followedArtistIds.has(artist.id)
+    );
+
+    const metadata: TrackWithMetadata = {
       id: track.id,
       name: track.name,
       artist: track.artists?.[0]?.name || 'Unknown Artist',
       rank: currentRank++,
-      timeframe: 'short_term',
+      timeframe,
       isSaved: savedTrackIds.has(track.id),
-      userId: spotifyUserData.profile?.id || 'anonymous',
+      isFollowedArtist,
+      userId,
       album: track.album?.name,
-      genres: track.artists?.[0]?.genres || [],
-      audioFeatures: {
-        releaseDate: track.album?.release_date,
-        explicit: track.explicit,
-        popularity: track.popularity
-      }
-    });
-  });
+      genres,
+      audioFeatures,
+      explicit,
+      releaseDate,
+      popularity: track.popularity,
+      tempo: audioFeatures?.tempo ?? undefined,
+      energy: audioFeatures?.energy ?? undefined,
+      danceability: audioFeatures?.danceability ?? undefined
+    };
+
+    if (rawAudioFeatures) {
+      metadata.audio_features = rawAudioFeatures;
+    }
+
+    seenTrackIds.add(track.id);
+    allTracks.push(metadata);
+  };
+  
+  // Priority 1: Short-term tracks (last 4 weeks) - Ranks 1-50
+  const shortTermTracks = spotifyUserData.top_tracks?.short_term || [];
+  shortTermTracks.slice(0, 50).forEach((track: any) => addTrack(track, 'short_term'));
   
   // Priority 2: Medium-term tracks (last 6 months) - Fill remaining slots
   const mediumTermTracks = spotifyUserData.top_tracks?.medium_term || [];
-  mediumTermTracks.forEach((track: any) => {
-    // Skip if already added from short-term
-    if (allTracks.find(t => t.id === track.id)) return;
-    
-    if (allTracks.length < 100) {
-      allTracks.push({
-        id: track.id,
-        name: track.name,
-        artist: track.artists?.[0]?.name || 'Unknown Artist',
-        rank: currentRank++,
-        timeframe: 'medium_term',
-        isSaved: savedTrackIds.has(track.id),
-        userId: spotifyUserData.profile?.id || 'anonymous',
-        album: track.album?.name,
-        genres: track.artists?.[0]?.genres || [],
-        audioFeatures: {
-          releaseDate: track.album?.release_date,
-          explicit: track.explicit,
-          popularity: track.popularity
-        }
-      });
-    }
-  });
+  for (const track of mediumTermTracks) {
+    if (allTracks.length >= 100) break;
+    addTrack(track, 'medium_term');
+  }
   
   // Priority 3: Long-term tracks (all-time) - Fill remaining slots
   const longTermTracks = spotifyUserData.top_tracks?.long_term || [];
-  longTermTracks.forEach((track: any) => {
-    // Skip if already added
-    if (allTracks.find(t => t.id === track.id)) return;
-    
-    if (allTracks.length < 100) {
-      allTracks.push({
-        id: track.id,
-        name: track.name,
-        artist: track.artists?.[0]?.name || 'Unknown Artist',
-        rank: currentRank++,
-        timeframe: 'long_term',
-        isSaved: savedTrackIds.has(track.id),
-        userId: spotifyUserData.profile?.id || 'anonymous',
-        album: track.album?.name,
-        genres: track.artists?.[0]?.genres || [],
-        audioFeatures: {
-          releaseDate: track.album?.release_date,
-          explicit: track.explicit,
-          popularity: track.popularity
-        }
-      });
-    }
-  });
+  for (const track of longTermTracks) {
+    if (allTracks.length >= 100) break;
+    addTrack(track, 'long_term');
+  }
   
   return allTracks;
 }
@@ -131,20 +150,21 @@ export function processGuestSpotifyData(
   console.log(`📏 Contribution size: ${tracksPerPerson} tracks (${guestCount} guests)`);
   
   // Step 3: Apply Vibe Gate filter (if configured)
+  // DEBUG: Vibe gate filtering disabled for debugging
   let filteredTracks = limitedTracks;
   let vibeGateStats = { passed: limitedTracks.length, total: limitedTracks.length, passRate: 100 };
   
-  if (vibeProfile) {
-    const vibeResult = filterTracksThroughVibeGate(limitedTracks, vibeProfile);
-    filteredTracks = vibeResult.passed;
-    vibeGateStats = vibeResult.stats;
-    
-    console.log(`🚪 Vibe Gate: ${vibeGateStats.passed}/${vibeGateStats.total} passed (${vibeGateStats.passRate.toFixed(1)}%)`);
-    
-    if (vibeGateStats.passed === 0) {
-      console.warn('⚠️ Warning: No tracks passed Vibe Gate! Consider loosening restrictions.');
-    }
-  }
+  // if (vibeProfile) {
+  //   const vibeResult = filterTracksThroughVibeGate(limitedTracks, vibeProfile);
+  //   filteredTracks = vibeResult.passed;
+  //   vibeGateStats = vibeResult.stats;
+  //   
+  //   console.log(`🚪 Vibe Gate: ${vibeGateStats.passed}/${vibeGateStats.total} passed (${vibeGateStats.passRate.toFixed(1)}%)`);
+  //   
+  //   if (vibeGateStats.passed === 0) {
+  //     console.warn('⚠️ Warning: No tracks passed Vibe Gate! Consider loosening restrictions.');
+  //   }
+  // }
   
   // Step 4: Calculate PTS for each track
   const ptsResults = calculateBatchPTS(filteredTracks);
@@ -173,6 +193,7 @@ export function processGuestSpotifyData(
       rank: result.breakdown.rank,
       timeframe: result.breakdown.timeframe,
       isSaved: result.breakdown.isSaved,
+      isFollowedArtist: result.breakdown.isFollowedArtist,
       pts: result.finalPTS,
       weightedPTS: result.finalPTS // Backend will apply contextual weighting
     }))

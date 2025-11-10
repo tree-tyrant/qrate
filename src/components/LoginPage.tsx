@@ -7,11 +7,11 @@ import { ArrowLeft, User, Lock, Music, Eye, EyeOff, Hash, Headphones, Zap } from
 import { motion } from 'motion/react';
 
 interface LoginPageProps {
-  onLogin: (username: string, password: string) => boolean;
+  onLogin: (username: string, password: string) => Promise<boolean>;
   onBack: () => void;
   onDJMode: () => void;
   onSignUp: () => void;
-  onJoinEvent?: (eventCode: string) => void;
+  onJoinEvent?: (eventCode: string) => Promise<void>;
 }
 
 function LoginPage({ onLogin, onBack, onDJMode, onSignUp, onJoinEvent }: LoginPageProps) {
@@ -31,7 +31,7 @@ function LoginPage({ onLogin, onBack, onDJMode, onSignUp, onJoinEvent }: LoginPa
     // Add a small delay for better UX
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    const success = onLogin(username, password);
+    const success = await onLogin(username, password);
     if (!success) {
       setError('Invalid credentials. Try demo/demo or tester/tester');
     }

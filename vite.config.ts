@@ -2,6 +2,7 @@
   import { defineConfig } from 'vite';
   import react from '@vitejs/plugin-react-swc';
   import path from 'path';
+  import fs from 'fs';
 
   export default defineConfig({
     plugins: [react()],
@@ -17,7 +18,6 @@
         'next-themes@0.4.6': 'next-themes',
         'lucide-react@0.487.0': 'lucide-react',
         'input-otp@1.4.2': 'input-otp',
-        'figma:asset/03076d54d61a704e0ad299c6eb4f7fd25fad191a.png': path.resolve(__dirname, './src/assets/03076d54d61a704e0ad299c6eb4f7fd25fad191a.png'),
         'embla-carousel-react@8.6.0': 'embla-carousel-react',
         'cmdk@1.1.1': 'cmdk',
         'class-variance-authority@0.7.1': 'class-variance-authority',
@@ -47,15 +47,101 @@
         '@radix-ui/react-aspect-ratio@1.1.2': '@radix-ui/react-aspect-ratio',
         '@radix-ui/react-alert-dialog@1.1.6': '@radix-ui/react-alert-dialog',
         '@radix-ui/react-accordion@1.2.3': '@radix-ui/react-accordion',
+        'motion/react': 'framer-motion',
         '@': path.resolve(__dirname, './src'),
       },
     },
     build: {
       target: 'esnext',
       outDir: 'build',
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom'],
+            'radix-ui': [
+              '@radix-ui/react-dialog',
+              '@radix-ui/react-dropdown-menu',
+              '@radix-ui/react-select',
+              '@radix-ui/react-tabs',
+              '@radix-ui/react-tooltip',
+            ],
+            'ui-vendor': ['lucide-react', 'framer-motion'],
+            'charts': ['recharts'],
+          },
+        },
+      },
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+        },
+      },
+      sourcemap: false,
+      chunkSizeWarningLimit: 1000,
     },
     server: {
       port: 3000,
+      host: '127.0.0.1',
+      https: (() => {
+        // Only use HTTPS in development if certificates exist
+        try {
+          const keyPath = path.resolve(__dirname, './certs/localhost-key.pem');
+          const certPath = path.resolve(__dirname, './certs/localhost.pem');
+          if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+            return {
+              key: fs.readFileSync(keyPath),
+              cert: fs.readFileSync(certPath),
+            };
+          }
+        } catch (error) {
+          // Certificates not available, use HTTP
+        }
+        return undefined;
+      })(),
       open: true,
+      proxy: {
+        '/make-server-6d46752d': {
+          target: 'https://localhost:3001',
+          changeOrigin: true,
+          secure: false, // Accept self-signed certificates
+          rewrite: (path) => path, // Keep the path as-is
+          configure: (proxy, _options) => {
+            const VERBOSE_PROXY = process.env.PROXY_VERBOSE === '1';
+            if (VERBOSE_PROXY) {
+              proxy.on('proxyReq', (proxyReq, req, res) => {
+                // Ensure proper HTTP/1.1 request
+                proxyReq.setHeader('Connection', 'keep-alive');
+                console.log(`[Proxy] ${req.method} ${req.url} -> ${proxyReq.path}`);
+              });
+              proxy.on('proxyRes', (proxyRes, req, res) => {
+                console.log(`[Proxy] Response ${proxyRes.statusCode} for ${req.url}`);
+              });
+            }
+            proxy.on('error', (err, req, res) => {
+              console.error('[Proxy] Error:', err.message);
+              if (!res.headersSent) {
+                res.writeHead(500, {
+                  'Content-Type': 'application/json',
+                });
+                res.end(JSON.stringify({ 
+                  error: 'Proxy error: ' + err.message,
+                  hint: 'Make sure the backend server is running on https://localhost:3001'
+                }));
+              }
+            });
+          },
+        },
+      },
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom', '@splinetool/react-spline'],
+      exclude: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+      esbuildOptions: {
+        resolveExtensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
+      },
+    },
+    esbuild: {
+      logOverride: { 'this-is-undefined-in-esm': 'silent' },
     },
   });

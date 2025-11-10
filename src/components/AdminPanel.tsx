@@ -2,19 +2,21 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 export default function AdminPanel() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#1a1a2e] to-[#0a0a0f] p-6">
-      <div className="max-w-4xl mx-auto">
-        <Card className="glass-effect border-[var(--glass-border)]">
+    <div className="bg-background min-h-screen py-10">
+      <div className="mx-auto px-4 max-w-4xl">
+        <Card className="glass-effect border border-border/40">
           <CardHeader>
-            <CardTitle className="text-white">Admin Panel</CardTitle>
+            <CardTitle className="text-2xl font-semibold">Admin Panel</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-gray-400">
-              Admin functionality is currently under development.
-            </p>
+          <CardContent className="space-y-3 text-muted-foreground">
+            <p>This admin view is coming soon.</p>
+            <p>Use the host dashboard to manage events while we finish building these tools.</p>
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
+
+
+

@@ -24,7 +24,7 @@ export function PhoneMockup({ children, showQRCodeInfo = false }: PhoneMockupPro
       
       {/* QR Code Info Text - shown on right side above the iPhone frame for event code entry */}
       {showQRCodeInfo && (
-        <div className="z-10 absolute right-4 md:right-8 top-[5vh] max-w-xs hidden lg:block">
+        <div className="hidden lg:block top-[5vh] right-4 md:right-8 z-10 absolute max-w-xs">
           <p className="text-white/80 text-sm leading-relaxed">
             Scanning the QR code takes guests directly to the event page, bypassing manual event code entry.
           </p>
@@ -32,14 +32,14 @@ export function PhoneMockup({ children, showQRCodeInfo = false }: PhoneMockupPro
       )}
 
       {/* Text above iPhone frame on left side */}
-      <div className="z-10 absolute left-8 top-8">
+      <div className="top-8 left-8 z-10 absolute">
         <p className="text-white/80 text-sm">
-          this Iphone frame only displays on pc, just for demo purposes
+          Note: The iPhone frame is for demo purposes and only displays on desktop.
         </p>
       </div>
 
       {/* iPhone mockup with content */}
-      <div className="z-10 relative mx-auto flex items-center justify-center" style={{ 
+      <div className="z-10 relative flex justify-center items-center mx-auto" style={{ 
         width: 'min(24rem, 90vw)',
         height: '95vh',
         maxHeight: '95vh'

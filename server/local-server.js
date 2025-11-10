@@ -162,7 +162,21 @@ function upsertSession(eventCode, sessionType, userId = 'anonymous') {
 // Create a new event
 app.post('/make-server-6d46752d/events', async (req, res) => {
   try {
-    const { name, theme, description, date, time, location, code } = req.body;
+    const { 
+      name, 
+      theme, 
+      description, 
+      date, 
+      time, 
+      location, 
+      code,
+      hostId,
+      status,
+      trashedAt,
+      imageUrl,
+      vibeProfile,
+      connectedPlaylist
+    } = req.body;
     console.log(`Creating event: ${name}, theme: ${theme}`);
     console.log('Request body:', JSON.stringify(req.body, null, 2));
     
@@ -226,6 +240,7 @@ app.post('/make-server-6d46752d/events', async (req, res) => {
       date: eventDate,
       time: eventTime,
       location: location?.trim() || null,
+      host_id: hostId || null,
       is_active: 1,
       created_at: now,
       updated_at: now
@@ -237,8 +252,8 @@ app.post('/make-server-6d46752d/events', async (req, res) => {
     // Save to SQLite with better error handling
     try {
       const stmt = db.prepare(`
-        INSERT INTO events (id, name, theme, description, code, date, time, location, is_active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO events (id, name, theme, description, code, date, time, location, host_id, is_active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       const result = stmt.run(
@@ -249,7 +264,8 @@ app.post('/make-server-6d46752d/events', async (req, res) => {
         eventData.code,
         eventData.date, 
         eventData.time, 
-        eventData.location, 
+        eventData.location,
+        eventData.host_id,
         eventData.is_active, 
         eventData.created_at, 
         eventData.updated_at
@@ -268,7 +284,12 @@ app.post('/make-server-6d46752d/events', async (req, res) => {
       kvStore.set(`event:${eventCode}`, {
         ...eventData,
         createdAt: eventData.created_at,
-        isActive: eventData.is_active === 1
+        isActive: eventData.is_active === 1,
+        status: status || 'upcoming',
+        trashedAt: trashedAt || null,
+        imageUrl: imageUrl || null,
+        vibeProfile: vibeProfile || null,
+        connectedPlaylist: connectedPlaylist || null
       });
       
       return res.json({ 
@@ -306,6 +327,119 @@ app.post('/make-server-6d46752d/events', async (req, res) => {
   }
 });
 
+// Update an existing event (by ID or code)
+app.put('/make-server-6d46752d/events/:identifier', async (req, res) => {
+  try {
+    const identifier = req.params.identifier;
+    const updates = req.body || {};
+    const now = new Date().toISOString();
+
+    let event = null;
+    let resolvedBy = 'id';
+
+    try {
+      event = db.prepare('SELECT * FROM events WHERE id = ?').get(identifier);
+    } catch (idLookupError) {
+      console.log(`Event lookup by id failed: ${idLookupError.message}`);
+    }
+
+    if (!event) {
+      try {
+        event = db.prepare('SELECT * FROM events WHERE code = ?').get(identifier.toUpperCase());
+        if (event) {
+          resolvedBy = 'code';
+        }
+      } catch (codeLookupError) {
+        console.log(`Event lookup by code failed: ${codeLookupError.message}`);
+      }
+    }
+
+    if (!event) {
+      const kvEvent = kvStore.get(`event:${identifier.toUpperCase()}`);
+      if (kvEvent) {
+        kvStore.set(`event:${identifier.toUpperCase()}`, {
+          ...kvEvent,
+          ...updates,
+          updated_at: now,
+          updatedAt: now
+        });
+        return res.json({ success: true, event: kvStore.get(`event:${identifier.toUpperCase()}`) });
+      }
+
+      return sendError(res, 404, 'Event not found', `No event found with identifier: ${identifier}`);
+    }
+
+    const updateFields = [];
+    const updateParams = [];
+
+    if (updates.name !== undefined) {
+      updateFields.push('name = ?');
+      updateParams.push(String(updates.name).trim());
+    }
+    if (updates.theme !== undefined) {
+      updateFields.push('theme = ?');
+      updateParams.push(String(updates.theme).trim());
+    }
+    if (updates.description !== undefined) {
+      updateFields.push('description = ?');
+      updateParams.push(updates.description === null ? null : String(updates.description));
+    }
+    if (updates.date !== undefined) {
+      updateFields.push('date = ?');
+      updateParams.push(String(updates.date));
+    }
+    if (updates.time !== undefined) {
+      updateFields.push('time = ?');
+      updateParams.push(String(updates.time));
+    }
+    if (updates.location !== undefined) {
+      updateFields.push('location = ?');
+      updateParams.push(updates.location === null ? null : String(updates.location));
+    }
+    if (updates.hostId !== undefined) {
+      updateFields.push('host_id = ?');
+      updateParams.push(updates.hostId === null ? null : String(updates.hostId));
+    }
+
+    if (updateFields.length > 0) {
+      updateFields.push('updated_at = ?');
+      updateParams.push(now);
+
+      if (resolvedBy === 'id') {
+        updateParams.push(identifier);
+        db.prepare(`UPDATE events SET ${updateFields.join(', ')} WHERE id = ?`).run(...updateParams);
+      } else {
+        updateParams.push(identifier.toUpperCase());
+        db.prepare(`UPDATE events SET ${updateFields.join(', ')} WHERE code = ?`).run(...updateParams);
+      }
+    }
+
+    const codeKey = event.code || identifier.toUpperCase();
+    const existingKvEvent = kvStore.get(`event:${codeKey}`);
+    const mergedEvent = {
+      ...(existingKvEvent || {}),
+      ...event,
+      ...updates,
+      host_id: updates.hostId !== undefined ? updates.hostId : (event.host_id || existingKvEvent?.host_id || null),
+      updated_at: now,
+      updatedAt: now
+    };
+
+    mergedEvent.status = updates.status !== undefined ? updates.status : (existingKvEvent?.status || updates.status || 'upcoming');
+    mergedEvent.trashedAt = updates.trashedAt !== undefined ? updates.trashedAt : existingKvEvent?.trashedAt || null;
+    mergedEvent.imageUrl = updates.imageUrl !== undefined ? updates.imageUrl : existingKvEvent?.imageUrl || null;
+    mergedEvent.vibeProfile = updates.vibeProfile !== undefined ? updates.vibeProfile : existingKvEvent?.vibeProfile || null;
+    mergedEvent.connectedPlaylist = updates.connectedPlaylist !== undefined ? updates.connectedPlaylist : existingKvEvent?.connectedPlaylist || null;
+
+    kvStore.set(`event:${codeKey}`, mergedEvent);
+
+    return res.json({ success: true, event: mergedEvent });
+  } catch (error) {
+    console.error(`Error updating event: ${error.message}`);
+    return sendError(res, 500, 'Failed to update event', error.message);
+  }
+});
+
 // Get event by code
 app.get('/make-server-6d46752d/events/:code', async (req, res) => {
   try {
@@ -334,10 +468,22 @@ app.get('/make-server-6d46752d/events/:code', async (req, res) => {
       console.log(`SQLite lookup error: ${dbError.message}`);
     }
     
-    // Fallback to KV store
-    if (!event) {
-      event = kvStore.get(`event:${code}`);
-      console.log(`Found event in KV:`, event ? 'yes' : 'no');
+    const kvEvent = kvStore.get(`event:${code}`);
+    if (kvEvent) {
+      event = {
+        ...kvEvent,
+        ...event,
+        status: kvEvent.status ?? event?.status ?? 'upcoming',
+        trashedAt: kvEvent.trashedAt ?? event?.trashedAt ?? null,
+        imageUrl: kvEvent.imageUrl ?? event?.imageUrl ?? null,
+        vibeProfile: kvEvent.vibeProfile ?? event?.vibeProfile ?? null,
+        connectedPlaylist: kvEvent.connectedPlaylist ?? event?.connectedPlaylist ?? null,
+        host_id: event?.host_id ?? kvEvent.host_id ?? null,
+        hostId: event?.host_id ?? kvEvent.hostId ?? kvEvent.host_id ?? null,
+        createdAt: event?.created_at || kvEvent.createdAt || kvEvent.created_at || event?.createdAt,
+        updatedAt: event?.updated_at || kvEvent.updatedAt || kvEvent.updated_at || event?.updatedAt
+      };
+      console.log(`Merged event data with KV store for code ${code}`);
     }
     
     if (!event) {
@@ -381,6 +527,84 @@ app.get('/make-server-6d46752d/events/:code', async (req, res) => {
   }
 });
 
+// Get events for a host
+app.get('/make-server-6d46752d/hosts/:hostId/events', async (req, res) => {
+  try {
+    const hostId = req.params.hostId;
+    console.log(`Getting events for host: ${hostId}`);
+
+    if (!hostId) {
+      return sendError(res, 400, 'Host ID is required');
+    }
+
+    let events = [];
+
+    // Try SQLite first
+    try {
+      const rows = db.prepare('SELECT * FROM events WHERE host_id = ? ORDER BY created_at DESC').all(hostId);
+      if (rows && rows.length > 0) {
+        events = rows.map((row) => {
+          let vibeProfile = null;
+          if (row.vibe_profile) {
+            try {
+              vibeProfile = JSON.parse(row.vibe_profile);
+            } catch (parseError) {
+              console.log(`Error parsing vibe_profile for event ${row.code}: ${parseError.message}`);
+            }
+          }
+
+          return {
+            ...row,
+            vibeProfile,
+            createdAt: row.created_at,
+            isActive: row.is_active === 1,
+            guestCount: 0
+          };
+        });
+        console.log(`Found ${events.length} events in SQLite for host ${hostId}`);
+      }
+    } catch (dbError) {
+      console.log(`SQLite lookup error for host events: ${dbError.message}`);
+    }
+
+    // Fallback to KV store (not host-aware)
+    if (events.length === 0) {
+      console.log('KV store fallback does not support host-based queries; returning empty array');
+    }
+
+    // Compute guest counts per event and merge KV metadata
+    for (const event of events) {
+      const kvEvent = kvStore.get(`event:${event.code}`);
+      if (kvEvent) {
+        event.status = kvEvent.status ?? event.status ?? 'upcoming';
+        event.trashedAt = kvEvent.trashedAt ?? null;
+        event.imageUrl = kvEvent.imageUrl ?? event.imageUrl ?? null;
+        event.vibeProfile = kvEvent.vibeProfile ?? event.vibeProfile ?? null;
+        event.connectedPlaylist = kvEvent.connectedPlaylist ?? event.connectedPlaylist ?? null;
+      } else {
+        event.status = event.status || 'upcoming';
+      }
+
+      try {
+        const prefResult = db.prepare('SELECT COUNT(DISTINCT guest_id) as count FROM guest_preferences WHERE event_code = ?').get(event.code);
+        if (prefResult && typeof prefResult.count === 'number') {
+          event.guestCount = prefResult.count;
+        } else {
+          event.guestCount = 0;
+        }
+      } catch (prefError) {
+        console.log(`Error getting guest count for event ${event.code}: ${prefError.message}`);
+        event.guestCount = 0;
+      }
+    }
+
+    return res.json({ success: true, events });
+  } catch (error) {
+    console.log(`Error fetching host events: ${error.message}`);
+    return sendError(res, 500, 'Failed to fetch host events', error.message);
+  }
+});
+
 // Submit guest preferences
 app.post('/make-server-6d46752d/events/:code/preferences', async (req, res) => {
   try {
@@ -409,8 +633,23 @@ app.post('/make-server-6d46752d/events/:code/preferences', async (req, res) => {
       }
     }
     
-    // Process Spotify playlist data if provided
-    const tracksData = preferences.tracksData || preferences.tracks || [];
+    // Extract source from additionalPreferences if nested
+    const source = preferences.source || preferences.additionalPreferences?.source || 'manual';
+    
+    // Extract tracksData from guestContribution if provided (Spotify OAuth flow)
+    let tracksData = preferences.tracksData || preferences.tracks || [];
+    if (!tracksData.length && preferences.guestContribution?.tracks) {
+      // Transform guestContribution tracks to tracksData format
+      tracksData = preferences.guestContribution.tracks.map((track) => ({
+        id: track.id,
+        name: track.name,
+        artist: track.artist,
+        artists: [track.artist],
+        album: undefined,
+        popularity: 0
+      }));
+    }
+    
     const stats = preferences.stats || {};
     const now = new Date().toISOString();
     
@@ -421,8 +660,8 @@ app.post('/make-server-6d46752d/events/:code/preferences', async (req, res) => {
       genres: JSON.stringify(preferences.genres || []),
       recent_tracks: JSON.stringify(preferences.recentTracks || []),
       spotify_playlists: JSON.stringify(preferences.spotifyPlaylists || []),
-      spotify_analyzed: preferences.spotifyAnalyzed || (preferences.source === 'spotify') ? 1 : 0,
-      source: preferences.source || 'manual',
+      spotify_analyzed: preferences.spotifyAnalyzed || (source === 'spotify') ? 1 : 0,
+      source: source,
       tracks_data: JSON.stringify(tracksData),
       stats: JSON.stringify(stats),
       submitted_at: now
@@ -458,7 +697,10 @@ app.post('/make-server-6d46752d/events/:code/preferences', async (req, res) => {
         for (const track of tracksData) {
           const trackId = track.id;
           const trackName = track.name;
-          const artistName = Array.isArray(track.artists) ? track.artists[0] : (track.artists || 'Unknown Artist');
+          // Handle both artist (string) and artists (array) formats
+          const artistName = Array.isArray(track.artists) 
+            ? track.artists[0] 
+            : (track.artists || track.artist || 'Unknown Artist');
           const albumName = track.album || null;
           const popularity = track.popularity || 0;
           
@@ -649,10 +891,10 @@ app.get('/make-server-6d46752d/events/:code/top-songs', async (req, res) => {
     const code = req.params.code.toUpperCase();
     console.log(`Getting top songs for event: ${code}`);
     
-    // Try to get from SQLite
+    // Try to get from SQLite first
     try {
       const songs = db.prepare(
-        'SELECT * FROM event_songs WHERE event_code = ? ORDER BY frequency DESC'
+        'SELECT * FROM event_songs WHERE event_code = ? ORDER BY frequency DESC LIMIT 15'
       ).all(code);
       
       if (songs && songs.length > 0) {
@@ -671,10 +913,99 @@ app.get('/make-server-6d46752d/events/:code/top-songs', async (req, res) => {
         return res.json({ success: true, songs: topSongs });
       }
     } catch (dbError) {
-      console.log(`SQLite top songs lookup error: ${dbError.message}`);
+      console.log(`SQLite top songs lookup error, using fallback: ${dbError.message}`);
     }
     
-    return res.json({ success: true, songs: [] });
+    // Fallback: aggregate from preferences (guest_preferences table)
+    let preferences = [];
+    
+    // Try SQLite first
+    try {
+      const prefData = db.prepare(
+        'SELECT tracks_data FROM guest_preferences WHERE event_code = ? AND source = ? AND tracks_data IS NOT NULL'
+      ).all(code, 'spotify');
+      
+      if (prefData) {
+        preferences = prefData.filter((p) => {
+          try {
+            const tracks = JSON.parse(p.tracks_data || '[]');
+            return Array.isArray(tracks) && tracks.length > 0;
+          } catch {
+            return false;
+          }
+        });
+      }
+    } catch (prefError) {
+      console.log(`SQLite preferences lookup error: ${prefError.message}`);
+    }
+    
+    // Fallback to KV if needed
+    if (preferences.length === 0) {
+      const kvPrefs = [];
+      for (const [key, value] of kvStore.entries()) {
+        if (key.startsWith(`preferences:${code}:`)) {
+          const pref = typeof value === 'string' ? JSON.parse(value) : value;
+          if ((pref.tracksData || pref.tracks) && (pref.source === 'spotify' || pref.spotifyAnalyzed === true)) {
+            kvPrefs.push(pref);
+          }
+        }
+      }
+      preferences = kvPrefs;
+    }
+    
+    // Aggregate tracks from all preferences
+    const trackCounts = {};
+    
+    preferences.forEach((pref) => {
+      let tracks = [];
+      if (pref.tracks_data) {
+        // From SQLite - parse JSON string
+        try {
+          tracks = JSON.parse(pref.tracks_data);
+        } catch {
+          tracks = [];
+        }
+      } else {
+        // From KV store - already parsed
+        tracks = pref.tracksData || pref.tracks || [];
+      }
+      
+      tracks.forEach((track) => {
+        const trackKey = `${track.id || track.name}-${Array.isArray(track.artists) ? track.artists[0]?.name || track.artists[0] : (track.artist || 'Unknown')}`;
+        if (!trackCounts[trackKey]) {
+          trackCounts[trackKey] = {
+            track: {
+              id: track.id || '',
+              name: track.name || track.title || '',
+              artists: track.artists || [track.artist] || ['Unknown Artist'],
+              album: track.album || '',
+              popularity: track.popularity || 0,
+              preview_url: track.preview_url || null
+            },
+            count: 0
+          };
+        }
+        trackCounts[trackKey].count++;
+      });
+    });
+    
+    // Sort by frequency and get top 15
+    const topSongs = Object.values(trackCounts)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15)
+      .map((item) => ({
+        id: item.track.id,
+        title: item.track.name,
+        artist: Array.isArray(item.track.artists) ? item.track.artists[0]?.name || item.track.artists[0] : item.track.artists,
+        album: item.track.album || '',
+        frequency: item.count,
+        popularity: item.track.popularity || 0,
+        spotifyTrackId: item.track.id,
+        preview_url: item.track.preview_url || null
+      }));
+    
+    console.log(`Aggregated ${topSongs.length} top songs from preferences`);
+    return res.json({ success: true, songs: topSongs });
   } catch (error) {
     console.log(`Error getting top songs: ${error.message}`);
     return sendError(res, 500, 'Failed to get top songs', error.message);
@@ -694,7 +1025,7 @@ app.get('/make-server-6d46752d/spotify/auth', async (req, res) => {
       return sendError(res, 500, 'Spotify integration not configured', null, 'Set SPOTIFY_CLIENT_ID in .env file');
     }
 
-    const scopes = 'user-read-private playlist-read-private playlist-read-collaborative user-follow-read';
+    const scopes = 'user-read-private user-read-email playlist-read-private playlist-read-collaborative user-follow-read user-top-read user-library-read';
     const redirectUri = process.env.SPOTIFY_GUEST_REDIRECT_URI || 'https://127.0.0.1:3000/guest';
     const state = Math.random().toString(36).substring(7);
     
@@ -703,7 +1034,8 @@ app.get('/make-server-6d46752d/spotify/auth', async (req, res) => {
       `client_id=${clientId}&` +
       `scope=${encodeURIComponent(scopes)}&` +
       `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `state=${state}`;
+      `state=${state}&` +
+      `show_dialog=true`;
 
     console.log('🎵 Generated Spotify auth URL for GUEST');
     console.log(`   Redirect URI: ${redirectUri}`);
@@ -719,18 +1051,29 @@ app.get('/make-server-6d46752d/spotify/auth', async (req, res) => {
 // Spotify callback route (for guests)
 app.post('/make-server-6d46752d/spotify/callback', async (req, res) => {
   try {
+    console.log('[Spotify Callback] Request received');
+    console.log('[Spotify Callback] Request body keys:', Object.keys(req.body || {}));
+    
     const { code } = req.body;
+    
+    if (!code) {
+      console.log('[Spotify Callback] ❌ No code provided in request body');
+      return sendError(res, 400, 'Authorization code required', null, 'No code parameter found in request');
+    }
+    
     const clientId = process.env.SPOTIFY_CLIENT_ID;
     const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
     
     if (!clientId || !clientSecret) {
-      console.log('Spotify credentials not configured');
+      console.log('[Spotify Callback] ❌ Spotify credentials not configured');
       return sendError(res, 500, 'Spotify integration not configured', null, 'Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env file');
     }
 
     const redirectUri = process.env.SPOTIFY_GUEST_REDIRECT_URI || 'https://127.0.0.1:3000/guest';
+    console.log('[Spotify Callback] Using redirect URI:', redirectUri);
     
     // Exchange code for access token
+    console.log('[Spotify Callback] Exchanging code for access token...');
     const tokenResponse = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
@@ -746,21 +1089,26 @@ app.post('/make-server-6d46752d/spotify/callback', async (req, res) => {
 
     if (!tokenResponse.ok) {
       const error = await tokenResponse.text();
-      console.log(`Spotify token exchange failed: ${error}`);
+      console.log(`[Spotify Callback] ❌ Token exchange failed: ${tokenResponse.status} ${tokenResponse.statusText}`);
+      console.log(`[Spotify Callback] Error details: ${error}`);
       return sendError(res, 400, 'Failed to exchange code for token', error);
     }
 
     const tokenData = await tokenResponse.json();
-    console.log('Successfully exchanged code for Spotify access token');
+    console.log('[Spotify Callback] ✅ Successfully exchanged code for Spotify access token');
+    console.log(`[Spotify Callback]    Granted scopes: ${tokenData.scope || '(none provided)'}`);
+    console.log(`[Spotify Callback]    Token expires in: ${tokenData.expires_in} seconds`);
     
     return res.json({ 
       success: true, 
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token,
-      expires_in: tokenData.expires_in
+      expires_in: tokenData.expires_in,
+      scope: tokenData.scope
     });
   } catch (error) {
-    console.log(`Error in Spotify callback: ${error.message}`);
+    console.log(`[Spotify Callback] ❌ Error in Spotify callback: ${error.message}`);
+    console.log(`[Spotify Callback] Stack: ${error.stack}`);
     return sendError(res, 500, 'Failed to process Spotify callback', error.message);
   }
 });
@@ -869,6 +1217,241 @@ app.post('/make-server-6d46752d/spotify/playlist-tracks', async (req, res) => {
   }
 });
 
+// Get comprehensive Spotify user data (profile, top tracks, top artists, saved tracks, playlists)
+app.post('/make-server-6d46752d/spotify/user-data', async (req, res) => {
+  try {
+    const { access_token } = req.body;
+    
+    if (!access_token) {
+      return sendError(res, 400, 'Access token required');
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${access_token}`
+    };
+
+    // Fetch all data in parallel for better performance
+    const [profileRes, topTracksShortRes, topTracksMediumRes, topTracksLongRes, 
+           topArtistsShortRes, topArtistsMediumRes, topArtistsLongRes, 
+           savedTracksRes, playlistsRes, followedArtistsRes] = await Promise.allSettled([
+      // User profile
+      fetch('https://api.spotify.com/v1/me', { headers }),
+      // Top tracks - short term (last 4 weeks)
+      fetch('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=50', { headers }),
+      // Top tracks - medium term (last 6 months)
+      fetch('https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=50', { headers }),
+      // Top tracks - long term (all time)
+      fetch('https://api.spotify.com/v1/me/top/tracks?time_range=long_term&limit=50', { headers }),
+      // Top artists - short term
+      fetch('https://api.spotify.com/v1/me/top/artists?time_range=short_term&limit=50', { headers }),
+      // Top artists - medium term
+      fetch('https://api.spotify.com/v1/me/top/artists?time_range=medium_term&limit=50', { headers }),
+      // Top artists - long term
+      fetch('https://api.spotify.com/v1/me/top/artists?time_range=long_term&limit=50', { headers }),
+      // Saved tracks (limit to 50 for performance)
+      fetch('https://api.spotify.com/v1/me/tracks?limit=50', { headers }),
+      // Playlists (limit to 50)
+      fetch('https://api.spotify.com/v1/me/playlists?limit=50', { headers }),
+      // Followed artists (limit to 50)
+      fetch('https://api.spotify.com/v1/me/following?type=artist&limit=50', { headers })
+    ]);
+
+    // Process profile
+    let profile = null;
+    if (profileRes.status === 'fulfilled' && profileRes.value.ok) {
+      profile = await profileRes.value.json();
+    }
+
+    // Process top tracks
+    const topTracks = {};
+    if (topTracksShortRes.status === 'fulfilled' && topTracksShortRes.value.ok) {
+      const data = await topTracksShortRes.value.json();
+      topTracks.short_term = (data.items || []).map((track) => ({
+        id: track.id,
+        name: track.name,
+        artists: track.artists?.map((a) => ({ name: a.name, id: a.id })),
+        album: {
+          name: track.album?.name,
+          images: track.album?.images || [],
+          release_date: track.album?.release_date
+        },
+        popularity: track.popularity,
+        explicit: track.explicit,
+        duration_ms: track.duration_ms,
+        preview_url: track.preview_url,
+        external_urls: track.external_urls
+      }));
+    } else if (topTracksShortRes.status === 'fulfilled') {
+      const errorText = await topTracksShortRes.value.text();
+      console.log(`❌ Failed to fetch top tracks (short_term): ${topTracksShortRes.value.status} ${topTracksShortRes.value.statusText} - ${errorText}`);
+    } else {
+      console.log(`❌ Top tracks (short_term) request failed: ${topTracksShortRes.reason}`);
+    }
+    if (topTracksMediumRes.status === 'fulfilled' && topTracksMediumRes.value.ok) {
+      const data = await topTracksMediumRes.value.json();
+      topTracks.medium_term = (data.items || []).map((track) => ({
+        id: track.id,
+        name: track.name,
+        artists: track.artists?.map((a) => ({ name: a.name, id: a.id })),
+        album: {
+          name: track.album?.name,
+          images: track.album?.images || [],
+          release_date: track.album?.release_date
+        },
+        popularity: track.popularity,
+        explicit: track.explicit,
+        duration_ms: track.duration_ms,
+        preview_url: track.preview_url,
+        external_urls: track.external_urls
+      }));
+    } else if (topTracksMediumRes.status === 'fulfilled') {
+      const errorText = await topTracksMediumRes.value.text();
+      console.log(`❌ Failed to fetch top tracks (medium_term): ${topTracksMediumRes.value.status} ${topTracksMediumRes.value.statusText} - ${errorText}`);
+    } else {
+      console.log(`❌ Top tracks (medium_term) request failed: ${topTracksMediumRes.reason}`);
+    }
+    if (topTracksLongRes.status === 'fulfilled' && topTracksLongRes.value.ok) {
+      const data = await topTracksLongRes.value.json();
+      topTracks.long_term = (data.items || []).map((track) => ({
+        id: track.id,
+        name: track.name,
+        artists: track.artists?.map((a) => ({ name: a.name, id: a.id })),
+        album: {
+          name: track.album?.name,
+          images: track.album?.images || [],
+          release_date: track.album?.release_date
+        },
+        popularity: track.popularity,
+        explicit: track.explicit,
+        duration_ms: track.duration_ms,
+        preview_url: track.preview_url,
+        external_urls: track.external_urls
+      }));
+    } else if (topTracksLongRes.status === 'fulfilled') {
+      const errorText = await topTracksLongRes.value.text();
+      console.log(`❌ Failed to fetch top tracks (long_term): ${topTracksLongRes.value.status} ${topTracksLongRes.value.statusText} - ${errorText}`);
+    } else {
+      console.log(`❌ Top tracks (long_term) request failed: ${topTracksLongRes.reason}`);
+    }
+
+    // Process top artists
+    const topArtists = {};
+    if (topArtistsShortRes.status === 'fulfilled' && topArtistsShortRes.value.ok) {
+      const data = await topArtistsShortRes.value.json();
+      topArtists.short_term = (data.items || []).map((artist) => ({
+        id: artist.id,
+        name: artist.name,
+        genres: artist.genres || []
+      }));
+    }
+    if (topArtistsMediumRes.status === 'fulfilled' && topArtistsMediumRes.value.ok) {
+      const data = await topArtistsMediumRes.value.json();
+      topArtists.medium_term = (data.items || []).map((artist) => ({
+        id: artist.id,
+        name: artist.name,
+        genres: artist.genres || []
+      }));
+    }
+    if (topArtistsLongRes.status === 'fulfilled' && topArtistsLongRes.value.ok) {
+      const data = await topArtistsLongRes.value.json();
+      topArtists.long_term = (data.items || []).map((artist) => ({
+        id: artist.id,
+        name: artist.name,
+        genres: artist.genres || []
+      }));
+    }
+
+    // Process saved tracks
+    let savedTracks = [];
+    if (savedTracksRes.status === 'fulfilled' && savedTracksRes.value.ok) {
+      const data = await savedTracksRes.value.json();
+      savedTracks = (data.items || [])
+        .map((item) => ({
+          id: item.track?.id,
+          name: item.track?.name,
+          artists: item.track?.artists?.map((a) => ({ name: a.name, id: a.id })),
+          album: {
+            name: item.track?.album?.name,
+            images: item.track?.album?.images || [],
+            release_date: item.track?.album?.release_date
+          },
+          popularity: item.track?.popularity,
+          explicit: item.track?.explicit,
+          duration_ms: item.track?.duration_ms,
+          preview_url: item.track?.preview_url,
+          external_urls: item.track?.external_urls
+        }))
+        .filter((t) => t.id);
+    } else if (savedTracksRes.status === 'fulfilled') {
+      const errorText = await savedTracksRes.value.text();
+      console.log(`❌ Failed to fetch saved tracks: ${savedTracksRes.value.status} ${savedTracksRes.value.statusText} - ${errorText}`);
+    } else {
+      console.log(`❌ Saved tracks request failed: ${savedTracksRes.reason}`);
+    }
+
+    // Process playlists
+    let playlists = [];
+    if (playlistsRes.status === 'fulfilled' && playlistsRes.value.ok) {
+      const data = await playlistsRes.value.json();
+      playlists = (data.items || []).map((playlist) => ({
+        id: playlist.id,
+        name: playlist.name,
+        track_count: playlist.tracks?.total || 0,
+        images: playlist.images || []
+      }));
+    }
+
+    // Process followed artists
+    let followedArtists = [];
+    if (followedArtistsRes.status === 'fulfilled' && followedArtistsRes.value.ok) {
+      const data = await followedArtistsRes.value.json();
+      const artists = data?.artists?.items || [];
+      followedArtists = artists.map((artist) => ({
+        id: artist.id,
+        name: artist.name,
+        genres: artist.genres || [],
+        popularity: artist.popularity,
+        images: artist.images || []
+      })).filter((artist) => artist.id);
+    }
+
+    // Calculate total track counts
+    const shortTermCount = topTracks.short_term?.length || 0;
+    const mediumTermCount = topTracks.medium_term?.length || 0;
+    const longTermCount = topTracks.long_term?.length || 0;
+    const totalTopTracks = shortTermCount + mediumTermCount + longTermCount;
+    
+    console.log(`✅ Fetched comprehensive Spotify user data for user: ${profile?.id || 'unknown'}`);
+    console.log(`   Top tracks: ${Object.keys(topTracks).length} timeframes`);
+    console.log(`     - Short term: ${shortTermCount} tracks`);
+    console.log(`     - Medium term: ${mediumTermCount} tracks`);
+    console.log(`     - Long term: ${longTermCount} tracks`);
+    console.log(`     - Total: ${totalTopTracks} tracks`);
+    console.log(`   Top artists: ${Object.keys(topArtists).length} timeframes`);
+    console.log(`   Saved tracks: ${savedTracks.length}`);
+    console.log(`   Playlists: ${playlists.length}`);
+    console.log(`   Followed artists: ${followedArtists.length}`);
+
+    return res.json({
+      success: true,
+      profile: profile ? {
+        id: profile.id,
+        display_name: profile.display_name,
+        email: profile.email,
+        images: profile.images || []
+      } : undefined,
+      top_tracks: Object.keys(topTracks).length > 0 ? topTracks : undefined,
+      top_artists: Object.keys(topArtists).length > 0 ? topArtists : undefined,
+      saved_tracks: savedTracks.length > 0 ? savedTracks : undefined,
+      playlists: playlists.length > 0 ? playlists : undefined,
+      followed_artists: followedArtists.length > 0 ? followedArtists : undefined
+    });
+  } catch (error) {
+    console.log(`Error fetching Spotify user data: ${error.message}`);
+    return sendError(res, 500, 'Failed to fetch user data', error.message);
+  }
+});
+
 // DJ Spotify authentication route
 app.get('/make-server-6d46752d/spotify/dj/auth', async (req, res) => {
   try {
@@ -887,7 +1470,8 @@ app.get('/make-server-6d46752d/spotify/dj/auth', async (req, res) => {
       `client_id=${clientId}&` +
       `scope=${encodeURIComponent(scopes)}&` +
       `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `state=${state}`;
+      `state=${state}&` +
+      `show_dialog=true`;
 
     console.log('🎵 Generated Spotify auth URL for DJ');
     console.log(`   Redirect URI: ${redirectUri}`);
@@ -936,12 +1520,14 @@ app.post('/make-server-6d46752d/spotify/dj/callback', async (req, res) => {
 
     const tokenData = await tokenResponse.json();
     console.log('Successfully exchanged code for DJ Spotify access token');
+    console.log(`   Granted scopes: ${tokenData.scope || '(none provided)'}`);
     
-    return res.json({ 
-      success: true, 
+    return res.json({
+      success: true,
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token,
-      expires_in: tokenData.expires_in
+      expires_in: tokenData.expires_in,
+      scope: tokenData.scope
     });
   } catch (error) {
     console.log(`Error in DJ Spotify callback: ${error.message}`);

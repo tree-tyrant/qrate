@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
 import { List, Music, Download, Undo2 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { isTouchDevice } from '../../utils/djDashboardHelpers';
 import type { Track } from '../../hooks/useDJDashboardState';
 
@@ -26,6 +26,7 @@ interface QueueSidebarProps {
   onMoveItem: (dragIndex: number, hoverIndex: number) => void;
   onExport: () => void;
   getSourceBadge: (source: string) => JSX.Element | null;
+  onReorderEnd?: () => void;
   DraggableQueueItem: any; // The DraggableQueueItem component
 }
 
@@ -45,6 +46,7 @@ export function QueueSidebar({
   onMoveItem,
   onExport,
   getSourceBadge,
+  onReorderEnd,
   DraggableQueueItem
 }: QueueSidebarProps) {
   
@@ -93,7 +95,7 @@ export function QueueSidebar({
                 <DndProvider backend={isTouchDevice() ? TouchBackend : HTML5Backend}>
                   <AnimatePresence mode="popLayout">
                     <div className="space-y-2">
-                      {currentQueue.slice(0, 10).map((song, index) => (
+                      {currentQueue.map((song, index) => (
                         <DraggableQueueItem
                           key={song.id}
                           song={song}
@@ -104,6 +106,7 @@ export function QueueSidebar({
                           onReturnToList={onReturnToList}
                           onMoveItem={onMoveItem}
                           getSourceBadge={getSourceBadge}
+                          onReorderEnd={onReorderEnd}
                         />
                       ))}
                     </div>

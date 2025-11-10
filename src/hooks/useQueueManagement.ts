@@ -1,7 +1,7 @@
 // Custom hook for queue management operations
 // Extracted to separate queue logic from main component
 
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import type { Track } from './useDJDashboardState';
 
 interface UseQueueManagementProps {

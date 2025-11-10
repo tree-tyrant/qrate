@@ -1,12 +1,35 @@
 // Custom hook for managing discovery queue
 // Handles loading and managing hidden anthems and deep cuts
 
-import { eventApi } from '../utils/api';
-import { generateCamelotKey } from '../utils/djDashboardHelpers';
+import { eventApi } from '@/utils/api';
+import { generateCamelotKey } from '@/utils/djDashboardHelpers';
 import type { Track } from './useDJDashboardState';
+
+const DEFAULT_PREVIEW_DURATION_MS = 20000;
+const MIN_PREVIEW_START_MS = 15000;
+
+function extractPreviewUrl(track: any): string | undefined {
+  return track.previewUrl || track.preview_url || track.external_preview_url;
+}
+
+function estimatePreviewStart(durationMs?: number): number | undefined {
+  if (!durationMs || durationMs <= 0) {
+    return undefined;
+  }
+  const heuristicStart = Math.round(durationMs * 0.4);
+  const maxStart = Math.max(0, durationMs - DEFAULT_PREVIEW_DURATION_MS);
+  return Math.max(MIN_PREVIEW_START_MS, Math.min(heuristicStart, maxStart));
+}
 
 interface UseDiscoveryQueueProps {
   eventCode: string;
+  currentQueue: Track[];
+  event?: {
+    name?: string;
+    theme?: string;
+    description?: string;
+  };
+  djSpotifyToken?: string;
   loadingDiscovery: boolean;
   setLoadingDiscovery: (loading: boolean) => void;
   discoveryQueue: { anthems: Track[] };
@@ -19,6 +42,9 @@ interface UseDiscoveryQueueProps {
  */
 export function useDiscoveryQueue({
   eventCode,
+  currentQueue,
+  event,
+  djSpotifyToken,
   loadingDiscovery,
   setLoadingDiscovery,
   discoveryQueue,
@@ -33,24 +59,42 @@ export function useDiscoveryQueue({
     
     const isTestEvent = eventCode.toUpperCase() === 'POOL';
     
+    // Extract Spotify track IDs from queue
+    const queueTrackIds = currentQueue
+      .filter(track => {
+        // Filter for Spotify tracks
+        return track.source === 'spotify' || 
+               track.source === 'ai' || 
+               track.id?.startsWith('spotify:') ||
+               (track as any).spotifyTrackId ||
+               (track as any).spotify_track_id;
+      })
+      .map(track => {
+        // Extract Spotify ID
+        if (track.id?.startsWith('spotify:track:')) {
+          return track.id.replace('spotify:track:', '');
+        }
+        if (track.id?.startsWith('spotify:')) {
+          return track.id.replace('spotify:', '');
+        }
+        return (track as any).spotifyTrackId || (track as any).spotify_track_id || track.id;
+      })
+      .filter(id => id && id.length > 0);
+    
+    // If queue is empty, return empty discovery queue
+    if (queueTrackIds.length === 0) {
+      setDiscoveryQueue({ anthems: [] });
+      setLoadingDiscovery(false);
+      return;
+    }
+    
     if (isTestEvent) {
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
     
-    try {
-      // Try to get discovery data from backend
-      const response = await eventApi.getInsights(eventCode);
-      if (response.success && response.data?.discoveryQueue) {
-        setDiscoveryQueue(response.data.discoveryQueue);
-        setLoadingDiscovery(false);
-        return;
-      }
-    } catch (error) {
-      console.error('Error loading discovery queue:', error);
-    }
-
-    // Fallback to mock data
-    const mockAnthems: Track[] = [
+    // For POOL test event, use mock data
+    if (isTestEvent) {
+      const mockAnthems: Track[] = [
       {
         id: 'anthem-1',
         title: 'Sunset Lover',
@@ -131,9 +175,40 @@ export function useDiscoveryQueue({
         passionDescription: '96% theme match! Perfect for the golden hour moment.',
         key: generateCamelotKey('anthem-5')
       }
-    ];
+      ];
 
-    setDiscoveryQueue({ anthems: mockAnthems });
+      setDiscoveryQueue({ anthems: mockAnthems });
+      setLoadingDiscovery(false);
+      return;
+    }
+    
+    // For normal accounts, fetch from backend
+    try {
+      const response = await eventApi.getDiscoveryQueue(eventCode, queueTrackIds, djSpotifyToken);
+      if (response.success && response.data?.anthems) {
+        // Add keys to anthems
+        const anthemsWithKeys = response.data.anthems.map((anthem: Track & { duration_ms?: number; durationMs?: number }) => {
+          const previewUrl = extractPreviewUrl(anthem);
+          const durationMs = anthem.duration_ms || anthem.durationMs;
+
+          return {
+            ...anthem,
+            key: generateCamelotKey(anthem.id || anthem.title || ''),
+            previewUrl,
+            previewStartMs: anthem.previewStartMs ?? anthem.preview_start_ms ?? estimatePreviewStart(durationMs),
+            previewDurationMs: anthem.previewDurationMs ?? anthem.preview_duration_ms ?? DEFAULT_PREVIEW_DURATION_MS,
+          };
+        });
+        setDiscoveryQueue({ anthems: anthemsWithKeys });
+        setLoadingDiscovery(false);
+        return;
+      }
+    } catch (error) {
+      console.error('Error loading discovery queue:', error);
+    }
+    
+    // If backend fails, return empty (don't use mock data for normal accounts)
+    setDiscoveryQueue({ anthems: [] });
     setLoadingDiscovery(false);
   };
 

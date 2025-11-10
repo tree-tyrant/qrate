@@ -85,15 +85,15 @@ export function memoize<Args extends unknown[], Result>(
 }
 
 /**
- * Debounce function calls
+ * Debounce function calls with cancel capability
  */
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
-): (...args: Parameters<T>) => void {
+): ((...args: Parameters<T>) => void) & { cancel: () => void } {
   let timeout: NodeJS.Timeout | null = null;
 
-  return function executedFunction(...args: Parameters<T>) {
+  const debounced = function executedFunction(...args: Parameters<T>) {
     const later = () => {
       timeout = null;
       func(...args);
@@ -101,7 +101,16 @@ export function debounce<T extends (...args: any[]) => any>(
 
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(later, wait);
+  } as ((...args: Parameters<T>) => void) & { cancel: () => void };
+
+  debounced.cancel = () => {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
   };
+
+  return debounced;
 }
 
 /**

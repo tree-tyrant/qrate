@@ -6,11 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { ArrowLeft, Upload, X, Filter, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Upload, X, Filter, TrendingUp, Sparkles, Calendar, Clock, MapPin, Image as ImageIcon, Music2, Zap, Loader2 } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { VibeGateConfigurator } from './VibeGateConfigurator';
 import { PTSVisualization } from './PTSVisualization';
 import { VibeProfile } from '../utils/types';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface EventCreationProps {
   onEventCreated: (event: { 
@@ -142,239 +143,315 @@ function EventCreation({ onEventCreated, onBack, isLoading }: EventCreationProps
   const currentImage = uploadedImage || selectedImage;
 
   return (
-    <div className="min-h-screen bg-background py-4">
-      <div className="container mx-auto px-4 max-w-4xl">
-        <div className="flex items-center justify-between mb-3">
+    <div className="bg-gradient-to-br from-background via-background/95 to-background/90 py-6 min-h-screen">
+      <div className="mx-auto px-4 max-w-5xl container">
+        {/* Header with gradient accent */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex justify-between items-center mb-6"
+        >
           <Button 
             variant="ghost" 
             onClick={onBack} 
-            className="glass-effect border border-border/30 hover:border-primary/50"
+            className="group hover:bg-cyan-500/10 border border-border/30 hover:border-cyan-500/50 transition-all duration-300 glass-effect"
             size="sm"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            <ArrowLeft className="mr-2 w-4 h-4 transition-transform group-hover:-translate-x-1" />
             Back
           </Button>
           
           <Button
             variant="outline"
             onClick={() => setAlgorithmDialogOpen(true)}
-            className="glass-effect border-accent/40 hover:border-accent/60 hover:bg-accent/10 text-accent"
+            className="hover:bg-purple-500/10 border-purple-500/40 hover:border-purple-500/60 text-purple-400 transition-all duration-300 glass-effect"
             size="sm"
           >
-            <TrendingUp className="w-4 h-4 mr-2" />
+            <TrendingUp className="mr-2 w-4 h-4" />
             Algorithm
           </Button>
-        </div>
+        </motion.div>
 
-        <Tabs defaultValue="details" className="space-y-3" value={currentTab} onValueChange={setCurrentTab}>
-          <TabsList className="grid grid-cols-2 w-full max-w-2xl mx-auto glass-effect">
-            <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="vibe">Vibe & Gate</TabsTrigger>
+        <Tabs defaultValue="details" className="space-y-4" value={currentTab} onValueChange={setCurrentTab}>
+          <TabsList className="grid grid-cols-2 mx-auto p-1 border border-border/30 w-full max-w-2xl glass-effect">
+            <TabsTrigger 
+              value="details"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500/20 data-[state=active]:to-blue-500/20 data-[state=active]:border-cyan-500/30 data-[state=active]:text-cyan-400 transition-all"
+            >
+              <Calendar className="mr-2 w-4 h-4" />
+              Details
+            </TabsTrigger>
+            <TabsTrigger 
+              value="vibe"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500/20 data-[state=active]:to-pink-500/20 data-[state=active]:border-purple-500/30 data-[state=active]:text-purple-400 transition-all"
+            >
+              <Sparkles className="mr-2 w-4 h-4" />
+              Vibe & Gate
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="details" className="space-y-3">
-            {/* Event Details Card */}
-            <Card className="glass-effect border-cyan-500/30">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-cyan-400 text-lg">Event Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 flex flex-col h-full">
-              {/* Event Name */}
-              <div className="space-y-1">
-                <Label htmlFor="event-name" className="text-muted-foreground text-xs">Event Name</Label>
-                <Input
-                  id="event-name"
-                  placeholder="Enter event name"
-                  value={eventName}
-                  onChange={(e) => setEventName(e.target.value)}
-                  className="bg-input-background border-border/50 focus:border-cyan-500/50 h-8 text-sm"
-                />
-              </div>
+          <TabsContent value="details" className="space-y-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="shadow-cyan-500/10 shadow-xl border-cyan-500/30 overflow-hidden glass-effect">
+                <CardHeader className="bg-gradient-to-r from-cyan-500/10 to-transparent pb-4 border-cyan-500/20 border-b">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-gradient-to-br from-cyan-500/20 to-blue-500/20 p-2 rounded-lg">
+                      <Calendar className="w-5 h-5 text-cyan-400" />
+                    </div>
+                    <CardTitle className="font-semibold text-cyan-400 text-xl">Event Details</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-6">
+                  {/* Event Name */}
+                  <div className="space-y-2">
+                    <Label htmlFor="event-name" className="flex items-center gap-2 font-medium text-foreground/80 text-sm">
+                      <Music2 className="w-4 h-4 text-cyan-400" />
+                      Event Name
+                    </Label>
+                    <Input
+                      id="event-name"
+                      placeholder="Enter event name"
+                      value={eventName}
+                      onChange={(e) => setEventName(e.target.value)}
+                      className="bg-input-background/50 border-border/50 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 h-10 text-sm transition-all"
+                    />
+                  </div>
 
-              {/* Date and Location Row */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="event-date" className="text-muted-foreground text-xs">Date</Label>
-                  <Input
-                    id="event-date"
-                    type="date"
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="bg-input-background border-border/50 focus:border-cyan-500/50 h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="location" className="text-muted-foreground text-xs">Location (Optional)</Label>
-                  <Input
-                    id="location"
-                    placeholder="Venue"
-                    value={eventLocation}
-                    onChange={(e) => setEventLocation(e.target.value)}
-                    className="bg-input-background border-border/50 focus:border-cyan-500/50 h-8 text-sm"
-                  />
-                </div>
-              </div>
+                  {/* Date and Location Row */}
+                  <div className="gap-4 grid grid-cols-1 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="event-date" className="flex items-center gap-2 font-medium text-foreground/80 text-sm">
+                        <Calendar className="w-4 h-4 text-cyan-400" />
+                        Date
+                      </Label>
+                      <Input
+                        id="event-date"
+                        type="date"
+                        value={eventDate}
+                        onChange={(e) => setEventDate(e.target.value)}
+                        min={new Date().toISOString().split('T')[0]}
+                        className="bg-input-background/50 border-border/50 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 h-10 text-sm transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="location" className="flex items-center gap-2 font-medium text-foreground/80 text-sm">
+                        <MapPin className="w-4 h-4 text-cyan-400" />
+                        Location (Optional)
+                      </Label>
+                      <Input
+                        id="location"
+                        placeholder="Venue name"
+                        value={eventLocation}
+                        onChange={(e) => setEventLocation(e.target.value)}
+                        className="bg-input-background/50 border-border/50 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 h-10 text-sm transition-all"
+                      />
+                    </div>
+                  </div>
 
-              {/* Start Time and End Time Row */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="event-time" className="text-muted-foreground text-xs">Start Time</Label>
-                  <Input
-                    id="event-time"
-                    type="time"
-                    value={eventTime}
-                    onChange={(e) => setEventTime(e.target.value)}
-                    className="bg-input-background border-border/50 focus:border-cyan-500/50 h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="end-time" className="text-muted-foreground text-xs">End Time</Label>
-                  <Input
-                    id="end-time"
-                    type="time"
-                    value={eventEndTime}
-                    onChange={(e) => setEventEndTime(e.target.value)}
-                    className="bg-input-background border-border/50 focus:border-cyan-500/50 h-8 text-sm"
-                  />
-                </div>
-              </div>
+                  {/* Start Time and End Time Row */}
+                  <div className="gap-4 grid grid-cols-1 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="event-time" className="flex items-center gap-2 font-medium text-foreground/80 text-sm">
+                        <Clock className="w-4 h-4 text-cyan-400" />
+                        Start Time
+                      </Label>
+                      <Input
+                        id="event-time"
+                        type="time"
+                        value={eventTime}
+                        onChange={(e) => setEventTime(e.target.value)}
+                        className="bg-input-background/50 border-border/50 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 h-10 text-sm transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="end-time" className="flex items-center gap-2 font-medium text-foreground/80 text-sm">
+                        <Clock className="w-4 h-4 text-cyan-400" />
+                        End Time
+                      </Label>
+                      <Input
+                        id="end-time"
+                        type="time"
+                        value={eventEndTime}
+                        onChange={(e) => setEventEndTime(e.target.value)}
+                        className="bg-input-background/50 border-border/50 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 h-10 text-sm transition-all"
+                      />
+                    </div>
+                  </div>
 
-              {/* Genre removed - now handled in Vibe Gate */}
-
-              {/* Set the Vibe Button - at bottom */}
-              <div className="pt-2 mt-auto">
-                {/* Help Text */}
-                <div className="text-center text-xs text-muted-foreground mb-3 pb-2 border-b border-border/30">
-                  Configure your event vibe and filters to proceed
-                </div>
-                
-                <Button 
-                  onClick={() => setCurrentTab('vibe')}
-                  disabled={!eventName.trim() || !eventDate || !eventTime}
-                  className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 shadow-lg shadow-purple-500/20 h-9 text-sm transition-transform hover:scale-105 active:scale-95"
-                >
-                  Set the Vibe →
-                </Button>
-              </div>
-            </CardContent>
-            </Card>
+                  {/* Set the Vibe Button */}
+                  <div className="mt-4 pt-4 border-border/30 border-t">
+                    <div className="mb-4 text-muted-foreground text-xs text-center">
+                      <Sparkles className="inline mr-2 w-4 h-4 text-purple-400" />
+                      Configure your event vibe and filters to proceed
+                    </div>
+                    
+                    <Button 
+                      onClick={() => setCurrentTab('vibe')}
+                      disabled={!eventName.trim() || !eventDate || !eventTime}
+                      className="bg-gradient-to-r from-purple-600 hover:from-purple-700 via-purple-500 hover:via-purple-600 to-pink-500 hover:to-pink-600 disabled:opacity-50 shadow-lg shadow-purple-500/30 w-full h-11 font-medium text-sm hover:scale-[1.02] active:scale-[0.98] disabled:hover:scale-100 transition-all duration-300 disabled:cursor-not-allowed"
+                    >
+                      <Sparkles className="mr-2 w-4 h-4" />
+                      Set the Vibe →
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           </TabsContent>
 
-          <TabsContent value="vibe" className="space-y-3">
-            {/* Vibe & Style Card */}
-            <Card className="glass-effect border-purple-500/40">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg text-purple-400">Vibe & Style</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {/* Image Selection */}
-              <div className="space-y-2">
-                <Label className="text-muted-foreground text-xs">Event Poster (Optional)</Label>
-                
-                <div className="grid grid-cols-5 gap-1.5">
-                  {stockImages.map((img, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        setSelectedImage(img);
-                        setUploadedImage('');
-                      }}
-                      className={`aspect-square rounded-md overflow-hidden border-2 transition-all ${
-                        (selectedImage === img && !uploadedImage)
-                          ? 'border-cyan-500/80 ring-2 ring-cyan-500/30' 
-                          : 'border-border/30 hover:border-cyan-500/50'
-                      }`}
-                    >
-                      <ImageWithFallback
-                        src={img}
-                        alt={`Party ${idx + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                  ))}
-                  
-                  {/* Upload Button as Tile */}
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`aspect-square rounded-md overflow-hidden border-2 transition-all flex flex-col items-center justify-center gap-1 ${
-                      uploadedImage
-                        ? 'border-purple-500/80 ring-2 ring-purple-500/30 bg-purple-500/10' 
-                        : 'border-purple-500/30 hover:border-purple-500/60 bg-purple-500/5 hover:bg-purple-500/10'
-                    }`}
-                  >
-                    <Upload className="w-4 h-4 text-purple-400" />
-                    <span className="text-[0.6rem] text-purple-400">Upload</span>
-                  </button>
-                </div>
-
-                {/* Show uploaded image preview */}
-                {uploadedImage && (
-                  <div className="relative aspect-video rounded-lg overflow-hidden border-2 border-purple-500/50">
-                    <ImageWithFallback
-                      src={uploadedImage}
-                      alt="Uploaded poster"
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      onClick={() => setUploadedImage('')}
-                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-black/80 transition-all"
-                    >
-                      <X className="w-3 h-3 text-white" />
-                    </button>
+          <TabsContent value="vibe" className="space-y-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+            >
+              {/* Vibe & Style Card */}
+              <Card className="shadow-purple-500/10 shadow-xl border-purple-500/40 overflow-hidden glass-effect">
+                <CardHeader className="bg-gradient-to-r from-purple-500/10 to-transparent pb-4 border-purple-500/20 border-b">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 p-2 rounded-lg">
+                      <ImageIcon className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <CardTitle className="font-semibold text-purple-400 text-lg">Vibe & Style</CardTitle>
                   </div>
-                )}
+                </CardHeader>
+                <CardContent className="space-y-4 pt-6">
+                  {/* Image Selection */}
+                  <div className="space-y-3">
+                    <Label className="flex items-center gap-2 font-medium text-foreground/80 text-sm">
+                      <ImageIcon className="w-4 h-4 text-purple-400" />
+                      Event Poster (Optional)
+                    </Label>
+                    
+                    <div className="gap-2 grid grid-cols-5">
+                      {stockImages.map((img, idx) => (
+                        <motion.button
+                          key={idx}
+                          onClick={() => {
+                            setSelectedImage(img);
+                            setUploadedImage('');
+                          }}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                            (selectedImage === img && !uploadedImage)
+                              ? 'border-purple-500/80 ring-2 ring-purple-500/30 shadow-lg shadow-purple-500/20' 
+                              : 'border-border/30 hover:border-purple-500/50 hover:shadow-md'
+                          }`}
+                        >
+                          <ImageWithFallback
+                            src={img}
+                            alt={`Party ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </motion.button>
+                      ))}
+                      
+                      {/* Upload Button as Tile */}
+                      <motion.button
+                        onClick={() => fileInputRef.current?.click()}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={`aspect-square rounded-lg overflow-hidden border-2 transition-all flex flex-col items-center justify-center gap-1.5 ${
+                          uploadedImage
+                            ? 'border-purple-500/80 ring-2 ring-purple-500/30 bg-purple-500/10 shadow-lg shadow-purple-500/20' 
+                            : 'border-purple-500/30 hover:border-purple-500/60 bg-purple-500/5 hover:bg-purple-500/10 hover:shadow-md'
+                        }`}
+                      >
+                        <Upload className={`w-5 h-5 ${uploadedImage ? 'text-purple-400' : 'text-purple-400/70'}`} />
+                        <span className={`text-[0.65rem] font-medium ${uploadedImage ? 'text-purple-400' : 'text-purple-400/70'}`}>Upload</span>
+                      </motion.button>
+                    </div>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-              </div>
+                    {/* Show uploaded image preview */}
+                    <AnimatePresence>
+                      {uploadedImage && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="relative shadow-lg border-2 border-purple-500/50 rounded-lg aspect-video overflow-hidden"
+                        >
+                          <ImageWithFallback
+                            src={uploadedImage}
+                            alt="Uploaded poster"
+                            className="w-full h-full object-cover"
+                          />
+                          <button
+                            onClick={() => setUploadedImage('')}
+                            className="top-2 right-2 absolute flex justify-center items-center bg-black/70 hover:bg-black/90 backdrop-blur-sm rounded-full w-7 h-7 hover:scale-110 transition-all"
+                          >
+                            <X className="w-4 h-4 text-white" />
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
-              {/* Save Event Button */}
-              <div className="pt-2">
-                <Button 
-                  onClick={handleCreateEvent}
-                  disabled={!eventName.trim() || selectedVibes.length === 0 || !eventDate || !eventTime || isLoading}
-                  className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 shadow-lg shadow-purple-500/20 h-9 text-sm transition-transform hover:scale-105 active:scale-95"
-                >
-                  {isLoading ? 'Creating...' : 'Save Event'}
-                </Button>
-              </div>
-            </CardContent>
-            </Card>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
 
             {/* Vibe Gate Configurator */}
-            <VibeGateConfigurator
-              theme={selectedVibes[0] || selectedGenre || ''}
-              eventName={eventName}
-              vibeProfile={vibeProfile}
-              onChange={setVibeProfile}
-              selectedVibes={selectedVibes}
-              onVibeChange={setSelectedVibes}
-            />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+            >
+              <VibeGateConfigurator
+                theme={selectedVibes[0] || selectedGenre || ''}
+                eventName={eventName}
+                vibeProfile={vibeProfile}
+                onChange={setVibeProfile}
+                selectedVibes={selectedVibes}
+                onVibeChange={setSelectedVibes}
+              />
+            </motion.div>
             
             {/* Save Event Button at Bottom */}
-            <div className="pt-2">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.3 }}
+              className="pt-4"
+            >
               <Button 
                 onClick={handleCreateEvent}
                 disabled={!eventName.trim() || selectedVibes.length === 0 || !eventDate || !eventTime || isLoading}
-                className="w-full bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-700 hover:to-emerald-600 shadow-lg shadow-green-500/20 h-10 text-sm transition-transform hover:scale-105 active:scale-95"
+                className="bg-gradient-to-r from-green-600 hover:from-green-700 via-emerald-500 hover:via-emerald-600 to-teal-500 hover:to-teal-600 disabled:opacity-50 shadow-green-500/30 shadow-lg w-full h-12 font-medium text-sm hover:scale-[1.02] active:scale-[0.98] disabled:hover:scale-100 transition-all duration-300 disabled:cursor-not-allowed"
               >
-                {isLoading ? 'Creating...' : '✓ Save Event'}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="mr-2 w-4 h-4" />
+                    ✓ Save Event
+                  </>
+                )}
               </Button>
-            </div>
+            </motion.div>
           </TabsContent>
         </Tabs>
         
         {/* Algorithm Dialog */}
         <Dialog open={algorithmDialogOpen} onOpenChange={setAlgorithmDialogOpen}>
-          <DialogContent className="glass-effect border-primary/30 text-white max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="border-primary/30 max-w-4xl max-h-[90vh] overflow-y-auto text-white glass-effect">
             <DialogHeader>
-              <DialogTitle className="gradient-text text-2xl">
+              <DialogTitle className="text-2xl gradient-text">
                 QRate Algorithm
               </DialogTitle>
               <DialogDescription className="text-muted-foreground">

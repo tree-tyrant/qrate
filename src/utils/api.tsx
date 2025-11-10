@@ -1,17 +1,32 @@
-// BACKEND DISABLED - localStorage-only mode
-const API_BASE_URL = ''
-const publicAnonKey = ''
+// API utilities for QRATE
+// Integrates with backend from synergy-main
+// Supports both local server and Vercel/Supabase deployments
 
-// Backend availability check - set to false to use localStorage-only mode
-// DISABLED: Set to false to prevent deployment errors and use localStorage-only mode
+import { log } from './logger';
+import { STORAGE_KEYS, SPOTIFY_OAUTH_VERSION } from './constants';
+import type { 
+  ApiResponse, 
+  SpotifyUserData, 
+  GuestPreferences, 
+  DiscoveryQueueResponse,
+  TrackInput,
+  VibeProfile,
+  PTSResult
+} from './types';
+
+// API Configuration
+// In development, use the local server proxy
+// In production, this should be set via environment variables
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/make-server-6d46752d'
+const publicAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+
+// Backend availability check
 let backendAvailable = false
-let backendCheckPerformed = true
+let backendCheckPerformed = false
 
-interface ApiResponse<T = any> {
-  success: boolean
-  data?: T
-  error?: string
-}
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
 
 // Check backend availability once on first API call
 async function checkBackendAvailability(): Promise<boolean> {
@@ -20,14 +35,15 @@ async function checkBackendAvailability(): Promise<boolean> {
   }
   
   try {
-    console.log('🔍 Checking backend availability...')
+    log.debug('Checking backend availability...', undefined, 'API');
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout
     
     const response = await fetch(`${API_BASE_URL}/health`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${publicAnonKey}`
+        'Content-Type': 'application/json',
+        ...(publicAnonKey && { 'Authorization': `Bearer ${publicAnonKey}` })
       },
       signal: controller.signal
     })
@@ -36,47 +52,56 @@ async function checkBackendAvailability(): Promise<boolean> {
     backendAvailable = response.ok
     backendCheckPerformed = true
     
-    if (backendAvailable) {
-      console.log('✅ Backend is available - using server API')
-    } else {
-      console.log('⚠️ Backend returned error - using localStorage-only mode')
-    }
+    log.backendStatus(backendAvailable, response.ok ? undefined : `HTTP ${response.status}`);
     
     return backendAvailable
   } catch (error) {
-    console.log('⚠️ Backend not available - using localStorage-only mode')
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    log.backendStatus(false, errorMessage);
     backendAvailable = false
     backendCheckPerformed = true
     return false
   }
 }
 
-async function apiCall<T = any>(
+/**
+ * Sleep utility for retry delays
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Make an API call with retry logic
+ */
+export async function apiCall<T = unknown>(
   endpoint: string, 
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryCount = 0
 ): Promise<ApiResponse<T>> {
   // Check backend availability first
   const isBackendAvailable = await checkBackendAvailability()
   
   if (!isBackendAvailable) {
-    console.log(`⚠️ Backend unavailable - skipping API call for ${endpoint}`)
+    log.warn(`Backend unavailable - skipping API call for ${endpoint}`, undefined, 'API');
     return { 
       success: false, 
       error: 'Backend unavailable - using localStorage mode' 
     }
   }
   
+  const method = options.method || 'GET';
+  log.apiCall(method, endpoint);
+  
   try {
-    console.log(`🔄 API Call: ${options.method || 'GET'} ${endpoint}`)
-    
     // Add timeout to prevent hanging requests
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
 
-    // Ensure we always have the authorization header
-    const headers = {
+    // Ensure we always have the authorization header if key is available
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${publicAnonKey}`,
+      ...(publicAnonKey && { 'Authorization': `Bearer ${publicAnonKey}` }),
       ...options.headers,
     }
 
@@ -86,18 +111,18 @@ async function apiCall<T = any>(
       signal: controller.signal
     })
 
-    clearTimeout(timeoutId);
+    clearTimeout(timeoutId)
 
     // Check if response is JSON before parsing
     const contentType = response.headers.get('content-type')
-    let data
+    let data: unknown
     
     if (contentType && contentType.includes('application/json')) {
       data = await response.json()
     } else {
       // Handle non-JSON responses (like HTML error pages)
       const text = await response.text()
-      console.error(`❌ Non-JSON response for ${endpoint}:`, text.substring(0, 200))
+      log.error(`Non-JSON response for ${endpoint}`, text.substring(0, 200), 'API');
       data = { 
         error: `Server returned non-JSON response: ${response.status} ${response.statusText}`,
         responseText: text.substring(0, 200)
@@ -107,42 +132,64 @@ async function apiCall<T = any>(
     if (!response.ok) {
       // Special handling for 404 errors (expected for demo/local-only events)
       if (response.status === 404) {
-        console.log(`ℹ️ API 404 for ${endpoint} - Event may only exist in localStorage`)
-        return { success: false, error: data.error || 'Event not found' }
+        log.info(`API 404 for ${endpoint} - Event may only exist in localStorage`, undefined, 'API');
+        return { success: false, error: (data as { error?: string }).error || 'Event not found' }
       }
       
-      console.error(`❌ API Error (${response.status}) for ${endpoint}:`, data)
+      // Retry on 5xx errors
+      if (response.status >= 500 && retryCount < MAX_RETRIES) {
+        log.warn(`Server error ${response.status}, retrying... (${retryCount + 1}/${MAX_RETRIES})`, undefined, 'API');
+        await sleep(RETRY_DELAY * (retryCount + 1)); // Exponential backoff
+        return apiCall<T>(endpoint, options, retryCount + 1);
+      }
+      
+      log.apiError(method, endpoint, data, 'API');
       
       // Special handling for 401 errors
       if (response.status === 401) {
-        console.error('🔒 Authorization failed - check if publicAnonKey is valid')
+        log.error('Authorization failed - check if publicAnonKey is valid', undefined, 'API');
         return { 
           success: false, 
-          error: `Authorization failed: ${data.message || 'Invalid or missing authorization'}` 
+          error: `Authorization failed: ${(data as { message?: string }).message || 'Invalid or missing authorization'}` 
         }
       }
       
-      return { success: false, error: data.error || `HTTP ${response.status}: API request failed` }
+      return { 
+        success: false, 
+        error: (data as { error?: string }).error || `HTTP ${response.status}: API request failed` 
+      }
     }
 
-    console.log(`✅ API Success: ${options.method || 'GET'} ${endpoint}`)
-    return { success: true, data }
-  } catch (error: any) {
-    console.error(`❌ API call failed for ${endpoint}:`, error)
+    log.apiSuccess(method, endpoint);
+    return { success: true, data: data as T }
+  } catch (error: unknown) {
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    
+    // Retry on network errors
+    if (retryCount < MAX_RETRIES && (
+      errorObj.name === 'AbortError' || 
+      (errorObj instanceof TypeError && errorObj.message.includes('fetch'))
+    )) {
+      log.warn(`Network error, retrying... (${retryCount + 1}/${MAX_RETRIES})`, errorObj, 'API');
+      await sleep(RETRY_DELAY * (retryCount + 1));
+      return apiCall<T>(endpoint, options, retryCount + 1);
+    }
+    
+    log.apiError(method, endpoint, errorObj, 'API');
     
     // Mark backend as unavailable on persistent errors
-    if (error instanceof TypeError && error.message.includes('fetch')) {
+    if (errorObj instanceof TypeError && errorObj.message.includes('fetch')) {
       backendAvailable = false
-      console.log('⚠️ Backend marked as unavailable - switching to localStorage-only mode')
+      log.backendStatus(false, 'Network error detected');
     }
     
-    if (error.name === 'AbortError') {
+    if (errorObj.name === 'AbortError') {
       return { success: false, error: 'Request timed out. Please try again.' }
     }
-    if (error instanceof TypeError && error.message.includes('fetch')) {
+    if (errorObj instanceof TypeError && errorObj.message.includes('fetch')) {
       return { success: false, error: 'Backend unavailable - using localStorage mode' }
     }
-    return { success: false, error: `Network error: ${error.message}` }
+    return { success: false, error: `Network error: ${errorObj.message}` }
   }
 }
 
@@ -155,9 +202,14 @@ export const eventApi = {
     description?: string
     date?: string
     time?: string
+    endTime?: string
     location?: string
     hostId?: string
     vibes?: string[]
+    genre?: string
+    imageUrl?: string
+    vibeProfile?: VibeProfile
+    code?: string
   }) {
     return apiCall('/events', {
       method: 'POST',
@@ -180,11 +232,33 @@ export const eventApi = {
     return apiCall(`/events/${eventCode}/insights`)
   },
 
+  // Get discovery queue (hidden anthems)
+  async getDiscoveryQueue(eventCode: string, queueTrackIds?: string[], accessToken?: string): Promise<ApiResponse<DiscoveryQueueResponse>> {
+    if (!queueTrackIds || queueTrackIds.length === 0) {
+      return { success: true, data: { anthems: [] } };
+    }
+    const params = new URLSearchParams({
+      queue_track_ids: queueTrackIds.join(',')
+    });
+    if (accessToken) {
+      params.append('access_token', accessToken);
+    }
+    const response = await apiCall<DiscoveryQueueResponse>(`/events/${eventCode}/discovery-queue?${params.toString()}`);
+    // apiCall wraps response in { success, data }, so response.data contains { success: true, anthems }
+    // Return in consistent format
+    if (response.success && response.data) {
+      return {
+        success: true,
+        data: {
+          anthems: response.data.anthems || []
+        }
+      };
+    }
+    return { success: false, data: { anthems: [] }, error: response.error };
+  },
+
   // Submit guest preferences
-  async submitPreferences(eventCode: string, preferences: {
-    spotifyUserData?: any
-    additionalPreferences?: any
-  }) {
+  async submitPreferences(eventCode: string, preferences: GuestPreferences) {
     return apiCall(`/events/${eventCode}/preferences`, {
       method: 'POST',
       body: JSON.stringify(preferences)
@@ -203,6 +277,7 @@ export const eventApi = {
     vibes?: string[]
     status?: string
     trashedAt?: string
+    imageUrl?: string
   }) {
     return apiCall(`/events/${eventId}`, {
       method: 'PUT',
@@ -223,6 +298,14 @@ export const eventApi = {
       method: 'DELETE'
     })
   },
+  
+  // Update queue order (DJ function)
+  async updateQueueOrder(eventCode: string, trackIds: string[]) {
+    return apiCall(`/events/${eventCode}/queue`, {
+      method: 'PUT',
+      body: JSON.stringify({ track_ids: trackIds })
+    })
+  },
 
   // Create Spotify playlist
   async createSpotifyPlaylist(eventCode: string, playlistData: {
@@ -230,10 +313,15 @@ export const eventApi = {
     playlist_name?: string
     playlist_description?: string
     is_public?: boolean
+    playlist_id?: string
+    track_ids?: string[]
   }) {
-    return apiCall(`/events/${eventCode}/create-playlist`, {
+    return apiCall('/spotify/create-playlist', {
       method: 'POST',
-      body: JSON.stringify(playlistData)
+      body: JSON.stringify({
+        event_code: eventCode,
+        ...playlistData
+      })
     })
   },
 
@@ -271,34 +359,55 @@ export const eventApi = {
 
 // Spotify API calls
 export const spotifyApi = {
-  // Get Spotify auth URL
+  // Get Spotify auth URL (for guests)
   async getAuthUrl(eventCode?: string) {
     const params = eventCode ? `?eventCode=${eventCode}` : ''
     return apiCall(`/spotify/auth${params}`)
   },
 
+  // Get Spotify auth URL (for DJs)
+  async getDJAuthUrl() {
+    return apiCall('/spotify/dj/auth')
+  },
+
+  // Exchange authorization code for access token (DJ callback)
+  async exchangeDJCode(code: string) {
+    return apiCall('/spotify/dj/callback', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    })
+  },
+
+  // Exchange authorization code for access token (Guest callback)
+  async exchangeGuestCode(code: string) {
+    return apiCall('/spotify/callback', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    })
+  },
+
   // Get comprehensive user data (top tracks, artists, playlists, etc.)
   async getUserData(accessToken: string) {
-    return apiCall('/spotify/user-data', {
+    return apiCall<SpotifyUserData>('/spotify/user-data', {
       method: 'POST',
       body: JSON.stringify({ access_token: accessToken })
     })
   },
 
   // Test Spotify configuration (bypasses auth)
-  async testSpotify() {
+  async testSpotify(): Promise<ApiResponse<unknown> & { status?: number }> {
     try {
       const response = await fetch(`${API_BASE_URL}/test/spotify`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
-          // Note: No Authorization header needed for test endpoints
         }
       })
       const data = await response.json()
       return { success: response.ok, data, status: response.status }
-    } catch (error) {
-      return { success: false, error: error.message }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: errorMessage }
     }
   }
 }
@@ -330,7 +439,7 @@ export const utils = {
   },
 
   // Debounce function for search/input
-  debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+  debounce<T extends (...args: unknown[]) => unknown>(func: T, wait: number): (...args: Parameters<T>) => void {
     let timeout: NodeJS.Timeout
     return (...args: Parameters<T>) => {
       clearTimeout(timeout)
@@ -345,20 +454,20 @@ export const utils = {
 
   // Storage utilities
   storage: {
-    set(key: string, value: any) {
+    set(key: string, value: unknown) {
       try {
         localStorage.setItem(key, JSON.stringify(value))
       } catch (error) {
-        console.warn('Failed to save to localStorage:', error)
+        log.warn('Failed to save to localStorage', error, 'Storage');
       }
     },
 
-    get(key: string) {
+    get(key: string): unknown {
       try {
         const item = localStorage.getItem(key)
         return item ? JSON.parse(item) : null
       } catch (error) {
-        console.warn('Failed to read from localStorage:', error)
+        log.warn('Failed to read from localStorage', error, 'Storage');
         return null
       }
     },
@@ -367,7 +476,7 @@ export const utils = {
       try {
         localStorage.removeItem(key)
       } catch (error) {
-        console.warn('Failed to remove from localStorage:', error)
+        log.warn('Failed to remove from localStorage', error, 'Storage');
       }
     }
   },
@@ -381,7 +490,7 @@ export const utils = {
         const hours12 = hours % 12 || 12;
         return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
       } catch (error) {
-        console.error('Error converting time:', error);
+        log.error('Error converting time', error, 'TimeUtils');
         return time24;
       }
     }
@@ -401,7 +510,43 @@ export const utils = {
     setAvailable(available: boolean) {
       backendAvailable = available
       backendCheckPerformed = true
-      console.log(`🔧 Backend manually set to: ${available ? 'available' : 'unavailable'}`)
+      log.info(`Backend manually set to: ${available ? 'available' : 'unavailable'}`, undefined, 'Backend');
+    }
+  },
+
+  // Spotify authentication utilities
+  spotify: {
+    /**
+     * Clear all Spotify tokens (for both guest and DJ flows)
+     * This forces users to re-authenticate with updated scopes
+     */
+    clearAllTokens() {
+      utils.storage.remove(STORAGE_KEYS.SPOTIFY_ACCESS_TOKEN)
+      utils.storage.remove(STORAGE_KEYS.SPOTIFY_REFRESH_TOKEN)
+      utils.storage.remove(STORAGE_KEYS.SPOTIFY_EXPIRES_AT)
+      // Also clear any legacy keys
+      utils.storage.remove('spotify_access_token')
+      utils.storage.remove('spotify_refresh_token')
+      utils.storage.remove('spotify_expires_at')
+      utils.storage.remove('dj_spotify_access_token')
+      log.info('Cleared all Spotify tokens - users will need to re-authenticate', undefined, 'Spotify')
+    },
+
+    /**
+     * Check if Spotify tokens need to be cleared due to OAuth scope changes
+     * Returns true if tokens were cleared, false otherwise
+     */
+    checkAndClearIfNeeded(): boolean {
+      const storedVersion = utils.storage.get(STORAGE_KEYS.SPOTIFY_OAUTH_VERSION) as string | null
+      
+      if (storedVersion !== SPOTIFY_OAUTH_VERSION) {
+        // Version mismatch - clear all tokens and update version
+        utils.spotify.clearAllTokens()
+        utils.storage.set(STORAGE_KEYS.SPOTIFY_OAUTH_VERSION, SPOTIFY_OAUTH_VERSION)
+        log.info(`Spotify OAuth version updated from ${storedVersion || 'none'} to ${SPOTIFY_OAUTH_VERSION} - tokens cleared`, undefined, 'Spotify')
+        return true
+      }
+      return false
     }
   }
 }
@@ -419,35 +564,36 @@ export const debug = {
   },
   
   // Test server health
-  async testHealth() {
+  async testHealth(): Promise<ApiResponse<unknown> & { status?: number }> {
     try {
       const response = await fetch(`${API_BASE_URL}/health`)
       const data = await response.json()
       return { success: response.ok, data, status: response.status }
-    } catch (error) {
-      return { success: false, error: error.message }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: errorMessage }
     }
   },
   
   // Test Spotify credentials (bypasses auth)
-  async testSpotify() {
+  async testSpotify(): Promise<ApiResponse<unknown> & { status?: number }> {
     try {
       const response = await fetch(`${API_BASE_URL}/test/spotify`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
-          // Note: No Authorization header needed for test endpoints
         }
       })
       const data = await response.json()
       return { success: response.ok, data, status: response.status }
-    } catch (error) {
-      return { success: false, error: error.message }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: errorMessage }
     }
   },
   
   // Test events list (bypasses auth)
-  async testEvents() {
+  async testEvents(): Promise<ApiResponse<unknown> & { status?: number }> {
     try {
       const response = await fetch(`${API_BASE_URL}/test/events`, {
         method: 'GET',
@@ -457,8 +603,9 @@ export const debug = {
       })
       const data = await response.json()
       return { success: response.ok, data, status: response.status }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: errorMessage }
     }
   }
 }
@@ -466,32 +613,32 @@ export const debug = {
 // Algorithm API calls (PTS + Vibe Gate)
 export const algorithmApi = {
   // Calculate Personal Taste Score for a single track
-  async calculatePTS(track: any) {
-    return apiCall('/algorithm/pts/calculate', {
+  async calculatePTS(track: TrackInput) {
+    return apiCall<PTSResult>('/algorithm/pts/calculate', {
       method: 'POST',
       body: JSON.stringify({ track })
     })
   },
 
   // Calculate PTS for multiple tracks
-  async calculateBatchPTS(tracks: any[]) {
-    return apiCall('/algorithm/pts/batch', {
+  async calculateBatchPTS(tracks: TrackInput[]) {
+    return apiCall<PTSResult[]>('/algorithm/pts/batch', {
       method: 'POST',
       body: JSON.stringify({ tracks })
     })
   },
 
   // Aggregate PTS scores for same tracks from multiple users
-  async aggregatePTS(ptsResults: any[]) {
-    return apiCall('/algorithm/pts/aggregate', {
+  async aggregatePTS(ptsResults: PTSResult[]) {
+    return apiCall<unknown>('/algorithm/pts/aggregate', {
       method: 'POST',
       body: JSON.stringify({ ptsResults })
     })
   },
 
   // Get top N tracks by aggregated PTS
-  async getTopTracks(ptsResults: any[], limit = 50) {
-    return apiCall('/algorithm/pts/top-tracks', {
+  async getTopTracks(ptsResults: PTSResult[], limit = 50) {
+    return apiCall<unknown>('/algorithm/pts/top-tracks', {
       method: 'POST',
       body: JSON.stringify({ ptsResults, limit })
     })
@@ -499,20 +646,20 @@ export const algorithmApi = {
 
   // Get expected PTS score ranges
   async getPTSScoreRanges() {
-    return apiCall('/algorithm/pts/score-ranges')
+    return apiCall<unknown>('/algorithm/pts/score-ranges')
   },
 
   // Validate a single track against vibe profile
-  async validateVibe(track: any, vibeProfile: any) {
-    return apiCall('/algorithm/vibe/validate', {
+  async validateVibe(track: TrackInput, vibeProfile: VibeProfile) {
+    return apiCall<unknown>('/algorithm/vibe/validate', {
       method: 'POST',
       body: JSON.stringify({ track, vibeProfile })
     })
   },
 
   // Filter multiple tracks through vibe gate
-  async filterVibe(tracks: any[], vibeProfile: any) {
-    return apiCall('/algorithm/vibe/filter', {
+  async filterVibe(tracks: TrackInput[], vibeProfile: VibeProfile) {
+    return apiCall<unknown>('/algorithm/vibe/filter', {
       method: 'POST',
       body: JSON.stringify({ tracks, vibeProfile })
     })
@@ -520,7 +667,7 @@ export const algorithmApi = {
 
   // Create vibe profile from event theme
   async createVibeFromTheme(theme: string, eventName: string) {
-    return apiCall('/algorithm/vibe/create-from-theme', {
+    return apiCall<VibeProfile>('/algorithm/vibe/create-from-theme', {
       method: 'POST',
       body: JSON.stringify({ theme, eventName })
     })
@@ -528,23 +675,23 @@ export const algorithmApi = {
 
   // Calculate contribution sizing
   async calculateTracksPerPerson(numUsers: number) {
-    return apiCall('/algorithm/vibe/calculate-tracks-per-person', {
+    return apiCall<{ tracksPerPerson: number }>('/algorithm/vibe/calculate-tracks-per-person', {
       method: 'POST',
       body: JSON.stringify({ numUsers })
     })
   },
 
   // Get vibe profile description
-  async getVibeDescription(profile: any) {
-    return apiCall('/algorithm/vibe/description', {
+  async getVibeDescription(profile: VibeProfile) {
+    return apiCall<{ description: string }>('/algorithm/vibe/description', {
       method: 'POST',
       body: JSON.stringify({ profile })
     })
   },
 
   // Generate recommendations using PTS + Vibe Gate
-  async generateRecommendations(guestPreferences: any[], vibeProfile?: any, limit = 50) {
-    return apiCall('/algorithm/recommend', {
+  async generateRecommendations(guestPreferences: GuestPreferences[], vibeProfile?: VibeProfile, limit = 50) {
+    return apiCall<unknown>('/algorithm/recommend', {
       method: 'POST',
       body: JSON.stringify({ guestPreferences, vibeProfile, limit })
     })
@@ -552,6 +699,7 @@ export const algorithmApi = {
 
   // Algorithm service health check
   async healthCheck() {
-    return apiCall('/algorithm/health')
+    return apiCall<unknown>('/algorithm/health')
   }
 }
+

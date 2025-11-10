@@ -12,10 +12,18 @@ export interface TrackWithMetadata {
   rank: number; // 1-100
   timeframe: RecencyTimeframe;
   isSaved: boolean;
+  isFollowedArtist?: boolean;
   userId: string;
   album?: string;
   genres?: string[];
   audioFeatures?: any;
+  audio_features?: any;
+  explicit?: boolean;
+  releaseDate?: string;
+  popularity?: number;
+  tempo?: number | null;
+  energy?: number | null;
+  danceability?: number | null;
 }
 
 export interface PTSResult {
@@ -24,11 +32,13 @@ export interface PTSResult {
   baseRankScore: number;
   recencyMultiplier: number;
   savedBonus: number;
+  followedArtistBonus: number;
   finalPTS: number;
   breakdown: {
     rank: number;
     timeframe: RecencyTimeframe;
     isSaved: boolean;
+    isFollowedArtist: boolean;
   };
 }
 
@@ -79,6 +89,14 @@ export function getSavedBonus(isSaved: boolean): number {
 }
 
 /**
+ * Get Followed Artist Bonus multiplier
+ * Tracks by artists the user follows get a small boost
+ */
+export function getFollowedArtistBonus(isFollowed: boolean): number {
+  return isFollowed ? 1.05 : 1.0;
+}
+
+/**
  * Calculate complete Personal Taste Score for a single track
  * 
  * PTS = (BaseRankScore) × (RecencyMultiplier) × (SavedBonus)
@@ -87,8 +105,9 @@ export function calculatePTS(track: TrackWithMetadata): PTSResult {
   const baseRankScore = calculateBaseRankScore(track.rank);
   const recencyMultiplier = getRecencyMultiplier(track.timeframe);
   const savedBonus = getSavedBonus(track.isSaved);
-  
-  const finalPTS = baseRankScore * recencyMultiplier * savedBonus;
+  const followedArtistBonus = getFollowedArtistBonus(Boolean(track.isFollowedArtist));
+
+  const finalPTS = baseRankScore * recencyMultiplier * savedBonus * followedArtistBonus;
   
   return {
     trackId: track.id,
@@ -96,11 +115,13 @@ export function calculatePTS(track: TrackWithMetadata): PTSResult {
     baseRankScore,
     recencyMultiplier,
     savedBonus,
+    followedArtistBonus,
     finalPTS,
     breakdown: {
       rank: track.rank,
       timeframe: track.timeframe,
-      isSaved: track.isSaved
+      isSaved: track.isSaved,
+      isFollowedArtist: Boolean(track.isFollowedArtist)
     }
   };
 }
@@ -192,6 +213,7 @@ export function formatPTSBreakdown(pts: PTSResult): string {
     `Base Score: ${pts.baseRankScore.toFixed(4)}`,
     `Timeframe: ${pts.breakdown.timeframe} (${pts.recencyMultiplier}x)`,
     `Saved: ${pts.breakdown.isSaved ? 'Yes' : 'No'} (${pts.savedBonus}x)`,
+    `Followed Artist: ${pts.breakdown.isFollowedArtist ? 'Yes' : 'No'} (${pts.followedArtistBonus.toFixed(2)}x)`,
     `─────────────────────`,
     `Final PTS: ${pts.finalPTS.toFixed(4)}`
   ];

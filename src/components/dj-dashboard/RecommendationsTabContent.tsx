@@ -46,6 +46,14 @@ export function RecommendationsTabContent({
   getSourceBadge,
   RecommendationCard
 }: RecommendationsTabContentProps) {
+  const anchorTrackName = selectedSong?.title || selectedSong?.name || selectedSong?.artist || 'this track';
+  const anchorKeyLabel = selectedSong?.key;
+  const flowMatches = harmonicFlowEnabled && selectedSong
+    ? filteredRecommendations.filter(
+        (track) => track.id !== selectedSong.id && typeof track.harmonicCompatibilityScore === 'number'
+      )
+    : [];
+  const hasFlowMatches = flowMatches.length > 0;
   
   return (
     <div className="space-y-4">
@@ -76,6 +84,23 @@ export function RecommendationsTabContent({
           Refresh
         </Button>
       </div>
+
+      {harmonicFlowEnabled && selectedSong && (
+        <div className="glass-effect rounded-xl border border-[var(--neon-purple)]/40 bg-[var(--neon-purple)]/10 p-4">
+          <div className="text-sm font-semibold text-white">
+            Harmonic Flow active — anchoring to {anchorTrackName}
+            {anchorKeyLabel ? ` (${anchorKeyLabel})` : ''}
+          </div>
+          <p className="text-xs text-gray-300 mt-1">
+            {hasFlowMatches
+              ? `Showing ${flowMatches.length} tracks ranked by how smoothly they mix into the anchor.`
+              : 'No direct harmonic matches available yet—showing crowd favorites until the right track appears.'}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Tap a recommendation to change the anchor and preview new harmonic paths.
+          </p>
+        </div>
+      )}
 
       {loadingInsights ? (
         <Card className="glass-effect border-[var(--glass-border)]">

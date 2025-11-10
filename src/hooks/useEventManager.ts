@@ -1,19 +1,25 @@
-import { useState, useCallback } from 'react';
-import { eventApi, utils } from '../utils/api';
-import { TIMEOUTS, STORAGE_KEYS } from '../utils/constants';
-import { Event } from '../utils/types';
+import { useState, useCallback, useRef } from 'react';
+import { eventApi, utils } from '@/utils/api';
+import { TIMEOUTS, STORAGE_KEYS } from '@/utils/constants';
+import { Event } from '@/utils/types';
 
 export function useEventManager() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Use ref to track loading state per event identifier to prevent infinite loops
+  const loadingEventsRef = useRef<Set<string>>(new Set());
 
   // Load event from backend or user accounts
   const loadEvent = useCallback(async (identifier: string): Promise<Event | null> => {
-    if (loading) {
-      console.log('⏳ Already loading, skipping duplicate request');
+    const normalizedId = identifier.toUpperCase();
+    
+    // Check if already loading this specific event
+    if (loadingEventsRef.current.has(normalizedId)) {
+      console.log(`⏳ Already loading event ${normalizedId}, skipping duplicate request`);
       return null;
     }
 
+    loadingEventsRef.current.add(normalizedId);
     setLoading(true);
     setError(null);
     
@@ -33,8 +39,50 @@ export function useEventManager() {
       // Try backend
       const response = await eventApi.get(identifier);
       if (response.success && response.data?.event) {
-        console.log(`✅ Event loaded from backend: ${response.data.event.eventName}`);
-        return response.data.event;
+        const backendEvent = response.data.event;
+        
+        // Transform backend event to Event type
+        const now = new Date();
+        let calculatedStatus: 'past' | 'live' | 'upcoming' = 'upcoming';
+        
+        if (backendEvent.date && backendEvent.time) {
+          const eventDateTime = new Date(`${backendEvent.date}T${backendEvent.time}`);
+          const eventEndTime = new Date(eventDateTime.getTime() + (4 * 60 * 60 * 1000)); // 4 hours
+          
+          if (now > eventEndTime) {
+            calculatedStatus = 'past';
+          } else if (now >= eventDateTime && now <= eventEndTime) {
+            calculatedStatus = 'live';
+          } else {
+            calculatedStatus = 'upcoming';
+          }
+        }
+        
+        const event: Event = {
+          id: backendEvent.id,
+          eventName: backendEvent.name || backendEvent.eventName || 'Untitled Event',
+          eventTheme: backendEvent.theme || backendEvent.eventTheme || '',
+          eventDescription: backendEvent.description || backendEvent.eventDescription,
+          code: backendEvent.code,
+          date: backendEvent.date,
+          time: backendEvent.time,
+          location: backendEvent.location,
+          eventImage: backendEvent.imageUrl || backendEvent.eventImage,
+          guestCount: backendEvent.guestCount || 0,
+          preferences: backendEvent.preferences || [],
+          status: backendEvent.status || calculatedStatus,
+          vibeProfile: backendEvent.vibeProfile,
+          guestContributions: backendEvent.guestContributions,
+          weightingConfig: backendEvent.weightingConfig,
+          connectedPlaylist: backendEvent.connectedPlaylist,
+          finalQueue: backendEvent.finalQueue,
+          insights: backendEvent.insights,
+          shareLink: backendEvent.shareLink,
+          qrCodeData: backendEvent.qrCodeData
+        };
+        
+        console.log(`✅ Event loaded from backend: ${event.eventName}`);
+        return event;
       }
       
       setError(`Event "${identifier}" not found`);
@@ -44,9 +92,10 @@ export function useEventManager() {
       setError('Failed to load event');
       return null;
     } finally {
-      setLoading(false);
+      loadingEventsRef.current.delete(normalizedId);
+      setLoading(loadingEventsRef.current.size > 0);
     }
-  }, [loading]);
+  }, []);
 
   // Refresh user events from backend
   const refreshUserEvents = useCallback(async (username: string): Promise<Event[]> => {
@@ -61,8 +110,50 @@ export function useEventManager() {
       ]) as any;
       
       if (response.success && response.data?.events) {
-        console.log(`✅ Refreshed ${response.data.events.length} events`);
-        return response.data.events;
+        // Transform backend events to Event type
+        const transformedEvents: Event[] = response.data.events.map((backendEvent: any) => {
+          const now = new Date();
+          let calculatedStatus: 'past' | 'live' | 'upcoming' = 'upcoming';
+          
+          if (backendEvent.date && backendEvent.time) {
+            const eventDateTime = new Date(`${backendEvent.date}T${backendEvent.time}`);
+            const eventEndTime = new Date(eventDateTime.getTime() + (4 * 60 * 60 * 1000)); // 4 hours
+            
+            if (now > eventEndTime) {
+              calculatedStatus = 'past';
+            } else if (now >= eventDateTime && now <= eventEndTime) {
+              calculatedStatus = 'live';
+            } else {
+              calculatedStatus = 'upcoming';
+            }
+          }
+          
+          return {
+            id: backendEvent.id,
+            eventName: backendEvent.name || backendEvent.eventName || 'Untitled Event',
+            eventTheme: backendEvent.theme || backendEvent.eventTheme || '',
+            eventDescription: backendEvent.description || backendEvent.eventDescription,
+            code: backendEvent.code,
+            date: backendEvent.date,
+            time: backendEvent.time,
+            location: backendEvent.location,
+            eventImage: backendEvent.imageUrl || backendEvent.eventImage,
+            guestCount: backendEvent.guestCount || 0,
+            preferences: backendEvent.preferences || [],
+            status: backendEvent.status || calculatedStatus,
+            vibeProfile: backendEvent.vibeProfile,
+            guestContributions: backendEvent.guestContributions,
+            weightingConfig: backendEvent.weightingConfig,
+            connectedPlaylist: backendEvent.connectedPlaylist,
+            finalQueue: backendEvent.finalQueue,
+            insights: backendEvent.insights,
+            shareLink: backendEvent.shareLink,
+            qrCodeData: backendEvent.qrCodeData
+          } as Event;
+        });
+        
+        console.log(`✅ Refreshed ${transformedEvents.length} events for ${username}`);
+        return transformedEvents;
       }
       
       return [];

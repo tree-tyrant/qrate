@@ -17,33 +17,80 @@ interface SmartFiltersProps {
 }
 
 function SmartFilters({ eventCode, currentFilters, hostPreferences, onFiltersUpdated }: SmartFiltersProps) {
-  const [filters, setFilters] = useState({
-    // Content Filter
-    noExplicit: false,
-    
-    // Repetition Velocity Control
-    preventArtistRepetition: true,
-    artistCooldownMinutes: 30,
-    
-    // Eras Bias (decades)
-    eraMinDecade: 1980,
-    eraMaxDecade: 2020,
-    eraFilterEnabled: false,
-    
-    // Energy & Vibe Controls
-    minEnergy: 0,
-    maxEnergy: 100,
-    minDanceability: 0,
-    maxDanceability: 100,
-    minValence: 0,
-    maxValence: 100,
-    
-    // Other filters
-    vocalFocus: false,
-    harmonicFlow: false, // Harmonic mixing feature
-    ...currentFilters
-  });
+  // Initialize filters from host's vibe profile if available
+  const getInitialFilters = () => {
+    const baseFilters = {
+      // Content Filter
+      noExplicit: false,
+      
+      // Repetition Velocity Control
+      preventArtistRepetition: true,
+      artistCooldownMinutes: 30,
+      
+      // Eras Bias (decades)
+      eraMinDecade: 1980,
+      eraMaxDecade: 2020,
+      eraFilterEnabled: false,
+      
+      // Energy & Vibe Controls
+      minEnergy: 0,
+      maxEnergy: 100,
+      minDanceability: 0,
+      maxDanceability: 100,
+      minValence: 0,
+      maxValence: 100,
+      
+      // Other filters
+      vocalFocus: false,
+      harmonicFlow: false, // Harmonic mixing feature
+    };
+
+    // If we have host preferences (vibeProfile), initialize from them
+    if (hostPreferences) {
+      // Map vibe profile to smart filters
+      if (hostPreferences.allowExplicit === false) {
+        baseFilters.noExplicit = true;
+      }
+
+      // Map energy range (0-1 to 0-100)
+      if (hostPreferences.energy) {
+        baseFilters.minEnergy = Math.round((hostPreferences.energy.min || 0) * 100);
+        baseFilters.maxEnergy = Math.round((hostPreferences.energy.max || 1) * 100);
+      }
+
+      // Map danceability range
+      if (hostPreferences.danceability) {
+        baseFilters.minDanceability = Math.round((hostPreferences.danceability.min || 0) * 100);
+        baseFilters.maxDanceability = Math.round((hostPreferences.danceability.max || 1) * 100);
+      }
+
+      // Map year range to era filter
+      if (hostPreferences.yearRange) {
+        if (hostPreferences.yearRange.min) {
+          baseFilters.eraMinDecade = Math.floor(hostPreferences.yearRange.min / 10) * 10;
+          baseFilters.eraFilterEnabled = true;
+        }
+        if (hostPreferences.yearRange.max) {
+          baseFilters.eraMaxDecade = Math.floor(hostPreferences.yearRange.max / 10) * 10;
+          baseFilters.eraFilterEnabled = true;
+        }
+      }
+    }
+
+    // Override with current filters if they exist (DJ has already customized)
+    return { ...baseFilters, ...currentFilters };
+  };
+
+  const [filters, setFilters] = useState(getInitialFilters());
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Update filters when hostPreferences change (but only if DJ hasn't customized yet)
+  useEffect(() => {
+    if (hostPreferences && Object.keys(currentFilters).length === 0) {
+      const newFilters = getInitialFilters();
+      setFilters(newFilters);
+    }
+  }, [hostPreferences]);
 
   const updateFilter = async (key: string, value: any) => {
     const newFilters = { ...filters, [key]: value };

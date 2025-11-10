@@ -4,8 +4,8 @@
 
 import { useMemo } from 'react';
 import type { Track, SmartFilters } from './useDJDashboardState';
-import { getCompatibleKeys } from '../utils/djDashboardHelpers';
-import { createLookupMap } from '../utils/performanceUtils';
+import { camelotKeyFromAudio } from '@/utils/djDashboardHelpers';
+import { createLookupMap } from '@/utils/performanceUtils';
 
 interface UseSmartFiltersProps {
   smartFilters: SmartFilters;
@@ -105,30 +105,98 @@ export function useSmartFilters({
    * Memoized to avoid recalculation
    */
   const applyHarmonicFlow = useMemo(() => (tracks: Track[]): Track[] => {
-    if (!smartFilters.harmonicFlow || !selectedSongForHarmonic || !selectedSongForHarmonic.key) {
+    if (!smartFilters.harmonicFlow || !selectedSongForHarmonic) {
       return tracks;
     }
 
-    const selectedKey = selectedSongForHarmonic.key;
-    const compatibleKeys = getCompatibleKeys(selectedKey);
-    
-    // Filter to only show harmonically compatible tracks
-    const harmonicMatches = tracks.filter(song => {
-      if (!song.key) return false;
-      return song.key === compatibleKeys.perfect || 
-             song.key === compatibleKeys.energyBoost || 
-             song.key === compatibleKeys.energyDrop;
+    const getTrackCamelotKey = (track: Track | null): string | null => {
+      if (!track) return null;
+      if (track.key) return track.key;
+      if (typeof track.audioFeatures?.key === 'number') {
+        return camelotKeyFromAudio(track.audioFeatures.key, track.audioFeatures.mode ?? null);
+      }
+      return null;
+    };
+
+    const parseCamelotKey = (key: string | null) => {
+      if (!key) return null;
+      const match = key.match(/^(\d{1,2})([AB])$/i);
+      if (!match) return null;
+      const number = parseInt(match[1], 10);
+      if (Number.isNaN(number)) return null;
+      return {
+        number: ((number - 1 + 12) % 12) + 1,
+        letter: match[2].toUpperCase() as 'A' | 'B'
+      };
+    };
+
+    const selectedCamelotKey = parseCamelotKey(getTrackCamelotKey(selectedSongForHarmonic));
+
+    if (!selectedCamelotKey) {
+      return tracks;
+    }
+
+    const evaluateCompatibility = (candidateKey: ReturnType<typeof parseCamelotKey>) => {
+      if (!candidateKey) {
+        return { score: 0, matchType: 'distant' as const };
+      }
+
+      const numberDiff = Math.abs(selectedCamelotKey.number - candidateKey.number);
+      const circularDiff = Math.min(numberDiff, 12 - numberDiff);
+      const sameLetter = selectedCamelotKey.letter === candidateKey.letter;
+      const delta = (candidateKey.number - selectedCamelotKey.number + 12) % 12;
+
+      if (circularDiff === 0 && sameLetter) return { score: 1.0, matchType: 'perfect' as const };
+      if (circularDiff === 0) return { score: 0.9, matchType: 'relative' as const };
+      if (circularDiff === 1 && sameLetter) {
+        return {
+          score: 0.8,
+          matchType: delta === 1 ? ('energyBoost' as const) : ('energyDrop' as const)
+        };
+      }
+      if (circularDiff === 1) return { score: 0.65, matchType: 'adjacent' as const };
+      if (circularDiff === 2 && sameLetter) return { score: 0.5, matchType: 'compatible' as const };
+      if (circularDiff === 2) return { score: 0.4, matchType: 'compatible' as const };
+      return { score: 0.2, matchType: 'distant' as const }; // minimal compatibility
+    };
+
+    const scoredTracks = tracks.map((track, index) => {
+      const trackCamelot = parseCamelotKey(getTrackCamelotKey(track));
+      const { score, matchType } = evaluateCompatibility(trackCamelot);
+      return {
+        track,
+        score,
+        matchType,
+        index
+      };
     });
-    
-    // Show selected song + 3 compatible tracks (one of each type if possible)
-    const perfectMatch = harmonicMatches.find(s => s.key === compatibleKeys.perfect && s.id !== selectedSongForHarmonic.id);
-    const energyBoost = harmonicMatches.find(s => s.key === compatibleKeys.energyBoost);
-    const energyDrop = harmonicMatches.find(s => s.key === compatibleKeys.energyDrop);
-    
-    return [
-      selectedSongForHarmonic,
-      ...[perfectMatch, energyBoost, energyDrop].filter(Boolean) as Track[]
-    ].slice(0, 4);
+
+    const matches = scoredTracks
+      .filter(item => item.score >= 0.4 && item.track.id !== selectedSongForHarmonic.id)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const matchScoreA = a.track.matchScore ?? 0;
+        const matchScoreB = b.track.matchScore ?? 0;
+        if (matchScoreB !== matchScoreA) return matchScoreB - matchScoreA;
+        return a.index - b.index;
+      })
+      .map((item, orderIndex) => ({
+        ...item.track,
+        harmonicCompatibilityScore: item.score,
+        harmonicMatchType: item.matchType
+      }));
+
+    if (matches.length === 0) {
+      return tracks;
+    }
+
+    const selectedTrack = {
+      ...selectedSongForHarmonic,
+      harmonicCompatibilityScore: 1,
+      harmonicMatchType: 'perfect'
+    };
+
+    return [selectedTrack, ...matches];
   }, [smartFilters.harmonicFlow, selectedSongForHarmonic]);
 
   return {

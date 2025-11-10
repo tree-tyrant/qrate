@@ -8,9 +8,9 @@ import { ArrowLeft, Headphones, Lock, User, Mail, Eye, EyeOff, Hash, Zap } from 
 import { motion } from 'motion/react';
 
 interface DJSignupLoginProps {
-  onLogin: (username: string, password: string) => boolean;
-  onSignup: (username: string, password: string, email: string) => boolean;
-  onJoinWithCode: (eventCode: string) => void;
+  onLogin: (username: string, password: string) => Promise<boolean>;
+  onSignup: (username: string, password: string, email: string) => Promise<boolean>;
+  onJoinWithCode: (eventCode: string) => Promise<void>;
   onBack: () => void;
 }
 
@@ -44,7 +44,7 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
 
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    const success = onLogin(loginUsername, loginPassword);
+    const success = await onLogin(loginUsername, loginPassword);
     if (!success) {
       setLoginError('Invalid credentials. Please try again.');
     }
@@ -68,7 +68,7 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
     setSignupLoading(true);
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    const success = onSignup(signupUsername, signupPassword, signupEmail);
+    const success = await onSignup(signupUsername, signupPassword, signupEmail);
     if (!success) {
       setSignupError('Username already exists');
     }
@@ -85,20 +85,20 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden flex items-center justify-center">
+    <div className="relative flex justify-center items-center min-h-screen overflow-hidden">
       {/* Animated Background */}
       <div className="absolute inset-0">
-        <div className="absolute top-10 left-10 w-2 h-2 bg-[var(--neon-pink)] rounded-full animate-pulse"></div>
-        <div className="absolute top-32 right-16 w-1 h-1 bg-[var(--neon-cyan)] rounded-full animate-pulse delay-700"></div>
-        <div className="absolute bottom-20 left-20 w-1.5 h-1.5 bg-[var(--neon-yellow)] rounded-full animate-pulse delay-1000"></div>
-        <div className="absolute bottom-40 right-32 w-1 h-1 bg-[var(--neon-purple)] rounded-full animate-pulse delay-300"></div>
+        <div className="top-10 left-10 absolute bg-[var(--neon-pink)] rounded-full w-2 h-2 animate-pulse"></div>
+        <div className="top-32 right-16 absolute bg-[var(--neon-cyan)] rounded-full w-1 h-1 animate-pulse delay-700"></div>
+        <div className="bottom-20 left-20 absolute bg-[var(--neon-yellow)] rounded-full w-1.5 h-1.5 animate-pulse delay-1000"></div>
+        <div className="right-32 bottom-40 absolute bg-[var(--neon-purple)] rounded-full w-1 h-1 animate-pulse delay-300"></div>
         
-        <div className="absolute -top-32 -right-32 w-96 h-96 bg-gradient-to-br from-purple-500/20 to-transparent rounded-full blur-3xl animate-float"></div>
-        <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-gradient-to-tr from-purple-700/20 to-transparent rounded-full blur-3xl animate-float" style={{animationDelay: '2s'}}></div>
+        <div className="-top-32 -right-32 absolute bg-gradient-to-br from-purple-500/20 to-transparent blur-3xl rounded-full w-96 h-96 animate-float"></div>
+        <div className="-bottom-32 -left-32 absolute bg-gradient-to-tr from-purple-700/20 to-transparent blur-3xl rounded-full w-80 h-80 animate-float" style={{animationDelay: '2s'}}></div>
       </div>
 
-      <div className="container mx-auto px-6 relative z-10 flex items-center justify-center min-h-screen py-12">
-        <div className="max-w-md w-full mx-auto">
+      <div className="z-10 relative flex justify-center items-center mx-auto px-6 py-12 min-h-screen container">
+        <div className="mx-auto w-full max-w-md">
           {/* Back Button */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -108,9 +108,9 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
           >
             <Button 
               onClick={onBack}
-              className="glass-effect hover:bg-[var(--neon-purple)]/10 border border-[var(--glass-border)] hover:border-[var(--neon-purple)]/50 text-white"
+              className="hover:bg-[var(--neon-purple)]/10 border border-[var(--glass-border)] hover:border-[var(--neon-purple)]/50 text-white glass-effect"
             >
-              <ArrowLeft className="w-4 h-4 mr-2" />
+              <ArrowLeft className="mr-2 w-4 h-4" />
               Back
             </Button>
           </motion.div>
@@ -120,12 +120,12 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            <Card className="glass-effect border-[var(--glass-border)] hover:border-purple-500/30 transition-all duration-500">
-              <CardHeader className="text-center pb-6">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-700 to-purple-900 flex items-center justify-center">
+            <Card className="border-[var(--glass-border)] hover:border-purple-500/30 transition-all duration-500 glass-effect">
+              <CardHeader className="pb-6 text-center">
+                <div className="flex justify-center items-center bg-gradient-to-br from-purple-700 to-purple-900 mx-auto mb-4 rounded-full w-16 h-16">
                   <Headphones className="w-8 h-8 text-white" />
                 </div>
-                <CardTitle className="text-2xl text-white">
+                <CardTitle className="text-white text-2xl">
                   DJ Access
                 </CardTitle>
                 <p className="text-purple-200/80 text-sm">
@@ -134,8 +134,8 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
               </CardHeader>
 
               <CardContent>
-                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3 mb-6">
+                <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as 'login' | 'signup' | 'code')} className="w-full">
+                  <TabsList className="grid grid-cols-3 mb-6 w-full">
                     <TabsTrigger value="login">Login</TabsTrigger>
                     <TabsTrigger value="signup">Sign Up</TabsTrigger>
                     <TabsTrigger value="code">Event Code</TabsTrigger>
@@ -145,7 +145,7 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                   <TabsContent value="login">
                     <form onSubmit={handleLogin} className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="login-username" className="text-white flex items-center gap-2">
+                        <Label htmlFor="login-username" className="flex items-center gap-2 text-white">
                           <User className="w-4 h-4 text-purple-400" />
                           Username
                         </Label>
@@ -155,13 +155,13 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                           placeholder="Enter your username"
                           value={loginUsername}
                           onChange={(e) => setLoginUsername(e.target.value)}
-                          className="glass-effect border-purple-400/40 text-white placeholder-purple-300/60 focus:border-purple-400 focus:ring-purple-400"
+                          className="border-purple-400/40 focus:border-purple-400 focus:ring-purple-400 text-white glass-effect placeholder-purple-300/60"
                           required
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="login-password" className="text-white flex items-center gap-2">
+                        <Label htmlFor="login-password" className="flex items-center gap-2 text-white">
                           <Lock className="w-4 h-4 text-purple-400" />
                           Password
                         </Label>
@@ -172,13 +172,13 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                             placeholder="Enter your password"
                             value={loginPassword}
                             onChange={(e) => setLoginPassword(e.target.value)}
-                            className="glass-effect border-purple-400/40 text-white placeholder-purple-300/60 focus:border-purple-400 focus:ring-purple-400 pr-12"
+                            className="pr-12 border-purple-400/40 focus:border-purple-400 focus:ring-purple-400 text-white glass-effect placeholder-purple-300/60"
                             required
                           />
                           <button
                             type="button"
                             onClick={() => setShowLoginPassword(!showLoginPassword)}
-                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-purple-300/60 hover:text-purple-400 transition-colors"
+                            className="top-1/2 right-3 absolute text-purple-300/60 hover:text-purple-400 transition-colors -translate-y-1/2 transform"
                           >
                             {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
@@ -189,7 +189,7 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                         <motion.div
                           initial={{ opacity: 0, y: -10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="p-3 glass-effect border border-red-500/30 rounded-lg bg-red-900/20"
+                          className="bg-red-900/20 p-3 border border-red-500/30 rounded-lg glass-effect"
                         >
                           <p className="text-red-400 text-sm text-center">{loginError}</p>
                         </motion.div>
@@ -198,16 +198,16 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                       <Button
                         type="submit"
                         disabled={loginLoading || !loginUsername || !loginPassword}
-                        className="w-full bg-gradient-to-r from-purple-700 to-purple-900 hover:from-purple-600 hover:to-purple-800 text-white py-3 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-purple-700/25 disabled:opacity-50"
+                        className="bg-gradient-to-r from-purple-700 hover:from-purple-600 to-purple-900 hover:to-purple-800 disabled:opacity-50 hover:shadow-lg hover:shadow-purple-700/25 py-3 rounded-xl w-full text-white transition-all duration-300"
                       >
                         {loginLoading ? (
-                          <div className="flex items-center justify-center">
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                          <div className="flex justify-center items-center">
+                            <div className="mr-2 border-2 border-white/30 border-t-white rounded-full w-4 h-4 animate-spin"></div>
                             Signing In...
                           </div>
                         ) : (
                           <>
-                            <Headphones className="w-4 h-4 mr-2" />
+                            <Headphones className="mr-2 w-4 h-4" />
                             Sign In as DJ
                           </>
                         )}
@@ -219,7 +219,7 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                   <TabsContent value="signup">
                     <form onSubmit={handleSignup} className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="signup-username" className="text-white flex items-center gap-2">
+                        <Label htmlFor="signup-username" className="flex items-center gap-2 text-white">
                           <User className="w-4 h-4 text-purple-400" />
                           Username
                         </Label>
@@ -229,13 +229,13 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                           placeholder="Choose a username"
                           value={signupUsername}
                           onChange={(e) => setSignupUsername(e.target.value)}
-                          className="glass-effect border-purple-400/40 text-white placeholder-purple-300/60 focus:border-purple-400 focus:ring-purple-400"
+                          className="border-purple-400/40 focus:border-purple-400 focus:ring-purple-400 text-white glass-effect placeholder-purple-300/60"
                           required
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="signup-email" className="text-white flex items-center gap-2">
+                        <Label htmlFor="signup-email" className="flex items-center gap-2 text-white">
                           <Mail className="w-4 h-4 text-purple-400" />
                           Email
                         </Label>
@@ -245,13 +245,13 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                           placeholder="your@email.com"
                           value={signupEmail}
                           onChange={(e) => setSignupEmail(e.target.value)}
-                          className="glass-effect border-purple-400/40 text-white placeholder-purple-300/60 focus:border-purple-400 focus:ring-purple-400"
+                          className="border-purple-400/40 focus:border-purple-400 focus:ring-purple-400 text-white glass-effect placeholder-purple-300/60"
                           required
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="signup-password" className="text-white flex items-center gap-2">
+                        <Label htmlFor="signup-password" className="flex items-center gap-2 text-white">
                           <Lock className="w-4 h-4 text-purple-400" />
                           Password
                         </Label>
@@ -262,13 +262,13 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                             placeholder="Create a password"
                             value={signupPassword}
                             onChange={(e) => setSignupPassword(e.target.value)}
-                            className="glass-effect border-purple-400/40 text-white placeholder-purple-300/60 focus:border-purple-400 focus:ring-purple-400 pr-12"
+                            className="pr-12 border-purple-400/40 focus:border-purple-400 focus:ring-purple-400 text-white glass-effect placeholder-purple-300/60"
                             required
                           />
                           <button
                             type="button"
                             onClick={() => setShowSignupPassword(!showSignupPassword)}
-                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-purple-300/60 hover:text-purple-400 transition-colors"
+                            className="top-1/2 right-3 absolute text-purple-300/60 hover:text-purple-400 transition-colors -translate-y-1/2 transform"
                           >
                             {showSignupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
@@ -276,7 +276,7 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="signup-confirm" className="text-white flex items-center gap-2">
+                        <Label htmlFor="signup-confirm" className="flex items-center gap-2 text-white">
                           <Lock className="w-4 h-4 text-purple-400" />
                           Confirm Password
                         </Label>
@@ -286,7 +286,7 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                           placeholder="Confirm your password"
                           value={signupConfirmPassword}
                           onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                          className="glass-effect border-purple-400/40 text-white placeholder-purple-300/60 focus:border-purple-400 focus:ring-purple-400"
+                          className="border-purple-400/40 focus:border-purple-400 focus:ring-purple-400 text-white glass-effect placeholder-purple-300/60"
                           required
                         />
                       </div>
@@ -295,7 +295,7 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                         <motion.div
                           initial={{ opacity: 0, y: -10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="p-3 glass-effect border border-red-500/30 rounded-lg bg-red-900/20"
+                          className="bg-red-900/20 p-3 border border-red-500/30 rounded-lg glass-effect"
                         >
                           <p className="text-red-400 text-sm text-center">{signupError}</p>
                         </motion.div>
@@ -304,16 +304,16 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                       <Button
                         type="submit"
                         disabled={signupLoading || !signupUsername || !signupEmail || !signupPassword || !signupConfirmPassword}
-                        className="w-full bg-gradient-to-r from-purple-700 to-purple-900 hover:from-purple-600 hover:to-purple-800 text-white py-3 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-purple-700/25 disabled:opacity-50"
+                        className="bg-gradient-to-r from-purple-700 hover:from-purple-600 to-purple-900 hover:to-purple-800 disabled:opacity-50 hover:shadow-lg hover:shadow-purple-700/25 py-3 rounded-xl w-full text-white transition-all duration-300"
                       >
                         {signupLoading ? (
-                          <div className="flex items-center justify-center">
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                          <div className="flex justify-center items-center">
+                            <div className="mr-2 border-2 border-white/30 border-t-white rounded-full w-4 h-4 animate-spin"></div>
                             Creating Account...
                           </div>
                         ) : (
                           <>
-                            <User className="w-4 h-4 mr-2" />
+                            <User className="mr-2 w-4 h-4" />
                             Create DJ Account
                           </>
                         )}
@@ -324,12 +324,12 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                   {/* Event Code Tab */}
                   <TabsContent value="code">
                     <div className="space-y-4">
-                      <p className="text-sm text-gray-400 text-center">
+                      <p className="text-gray-400 text-sm text-center">
                         Join an event without creating an account using the event code
                       </p>
 
                       <div className="space-y-2">
-                        <Label htmlFor="event-code" className="text-white flex items-center gap-2">
+                        <Label htmlFor="event-code" className="flex items-center gap-2 text-white">
                           <Hash className="w-4 h-4 text-purple-400" />
                           Event Code
                         </Label>
@@ -339,7 +339,7 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                           placeholder="Enter code (e.g., ABC123)"
                           value={eventCode}
                           onChange={(e) => setEventCode(e.target.value.toUpperCase())}
-                          className="glass-effect border-purple-400/40 text-white placeholder-purple-300/60 focus:border-purple-400 focus:ring-purple-400 font-mono tracking-wider text-center"
+                          className="border-purple-400/40 focus:border-purple-400 focus:ring-purple-400 font-mono text-white text-center tracking-wider glass-effect placeholder-purple-300/60"
                           onKeyDown={(e) => e.key === 'Enter' && handleJoinWithCode()}
                         />
                       </div>
@@ -347,16 +347,16 @@ function DJSignupLogin({ onLogin, onSignup, onJoinWithCode, onBack }: DJSignupLo
                       <Button
                         onClick={handleJoinWithCode}
                         disabled={!eventCode.trim() || codeLoading}
-                        className="w-full bg-gradient-to-r from-purple-700 to-purple-900 hover:from-purple-600 hover:to-purple-800 text-white py-3 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-purple-700/25 disabled:opacity-50"
+                        className="bg-gradient-to-r from-purple-700 hover:from-purple-600 to-purple-900 hover:to-purple-800 disabled:opacity-50 hover:shadow-lg hover:shadow-purple-700/25 py-3 rounded-xl w-full text-white transition-all duration-300"
                       >
                         {codeLoading ? (
-                          <div className="flex items-center justify-center">
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                          <div className="flex justify-center items-center">
+                            <div className="mr-2 border-2 border-white/30 border-t-white rounded-full w-4 h-4 animate-spin"></div>
                             Accessing Event...
                           </div>
                         ) : (
                           <>
-                            <Zap className="w-4 h-4 mr-2" />
+                            <Zap className="mr-2 w-4 h-4" />
                             Access DJ Dashboard
                           </>
                         )}

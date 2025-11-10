@@ -21,3 +21,4 @@ echo "💡 To reset the database for a fresh demo:"
 echo "   npm run reset-db"
 echo ""
 
+

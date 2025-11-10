@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useMemo, memo } from 'react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Card, CardContent } from './ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Progress } from './ui/progress';
-import { X, Play, Users, TrendingUp, Music, ArrowRight, Volume2, Heart } from 'lucide-react';
+import { X, Users, TrendingUp, Music, ArrowRight, Volume2, Heart } from 'lucide-react';
 
 interface SongCardProps {
   song: {
@@ -17,7 +17,6 @@ interface SongCardProps {
     duration_ms?: number;
   };
   averageScore?: number;
-  guestCount?: number;
   playlistCount?: number;
   crowdAffinity?: number;
   transitionSongs?: Array<{
@@ -36,10 +35,9 @@ interface SongCardProps {
   rank?: number;
 }
 
-function SongCard({ 
+const SongCard = memo(function SongCard({ 
   song, 
   averageScore = 0, 
-  guestCount = 0, 
   playlistCount = 0,
   crowdAffinity = 0,
   transitionSongs = [],
@@ -48,11 +46,22 @@ function SongCard({
   showDetails = true,
   rank 
 }: SongCardProps) {
-  const [showTransitions, setShowTransitions] = useState(false);
 
-  const artistNames = song.artists?.map(a => a.name).join(', ') || 'Unknown Artist';
-  const albumArt = song.album?.images?.[0]?.url;
-  const duration = song.duration_ms ? Math.floor(song.duration_ms / 1000 / 60) + ':' + String(Math.floor((song.duration_ms / 1000) % 60)).padStart(2, '0') : '';
+  // Memoize expensive computations
+  const artistNames = useMemo(
+    () => song.artists?.map(a => a.name).join(', ') || 'Unknown Artist',
+    [song.artists]
+  );
+  
+  const albumArt = useMemo(
+    () => song.album?.images?.[0]?.url,
+    [song.album?.images]
+  );
+  
+  const duration = useMemo(
+    () => song.duration_ms ? Math.floor(song.duration_ms / 1000 / 60) + ':' + String(Math.floor((song.duration_ms / 1000) % 60)).padStart(2, '0') : '',
+    [song.duration_ms]
+  );
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-400';
@@ -67,10 +76,13 @@ function SongCard({
     return { label: 'Discovery Track', color: 'bg-purple-500' };
   };
 
-  const affinityLevel = getAffinityLevel(crowdAffinity);
+  const affinityLevel = useMemo(
+    () => getAffinityLevel(crowdAffinity),
+    [crowdAffinity]
+  );
 
   return (
-    <Card className="bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 transition-all duration-200 group">
+    <Card className="group bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 transition-all duration-200">
       <CardContent className="p-4">
         <div className="flex items-center gap-4">
           {/* Rank Badge */}
@@ -88,7 +100,7 @@ function SongCard({
 
           {/* Album Art */}
           <div className="flex-shrink-0">
-            <div className="w-12 h-12 bg-zinc-800 rounded-lg flex items-center justify-center overflow-hidden">
+            <div className="flex justify-center items-center bg-zinc-800 rounded-lg w-12 h-12 overflow-hidden">
               {albumArt ? (
                 <img src={albumArt} alt={song.album?.name} className="w-full h-full object-cover" />
               ) : (
@@ -102,14 +114,14 @@ function SongCard({
             <div className="flex items-center gap-2 mb-1">
               <h3 className="font-medium text-white truncate">{song.name}</h3>
               {song.explicit && (
-                <Badge variant="outline" className="border-red-500 text-red-400 text-xs py-0 px-1">
+                <Badge variant="outline" className="px-1 py-0 border-red-500 text-red-400 text-xs">
                   E
                 </Badge>
               )}
             </div>
             <p className="text-zinc-400 text-sm truncate">{artistNames}</p>
             {song.album?.name && (
-              <p className="text-zinc-500 text-xs truncate mt-0.5">{song.album.name}</p>
+              <p className="mt-0.5 text-zinc-500 text-xs truncate">{song.album.name}</p>
             )}
           </div>
 
@@ -133,7 +145,7 @@ function SongCard({
 
               {/* Playlist Count */}
               {playlistCount > 0 && (
-                <div className="flex items-center gap-1 text-xs text-zinc-400">
+                <div className="flex items-center gap-1 text-zinc-400 text-xs">
                   <Users className="w-3 h-3" />
                   <span>{playlistCount} playlists</span>
                 </div>
@@ -142,7 +154,7 @@ function SongCard({
           )}
 
           {/* Actions */}
-          <div className="flex-shrink-0 flex items-center gap-2">
+          <div className="flex flex-shrink-0 items-center gap-2">
             {/* Info Dialog */}
             <Dialog>
               <DialogTrigger asChild>
@@ -150,18 +162,18 @@ function SongCard({
                   <Volume2 className="w-4 h-4" />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl">
+              <DialogContent className="bg-zinc-900 border-zinc-800 max-w-2xl text-white">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-3">
                     {albumArt && (
-                      <img src={albumArt} alt={song.album?.name} className="w-12 h-12 rounded-lg" />
+                      <img src={albumArt} alt={song.album?.name} className="rounded-lg w-12 h-12" />
                     )}
                     <div>
                       <div className="flex items-center gap-2">
                         {song.name}
                         {song.explicit && <Badge variant="outline" className="border-red-500 text-red-400">E</Badge>}
                       </div>
-                      <p className="text-zinc-400 text-sm font-normal">{artistNames}</p>
+                      <p className="font-normal text-zinc-400 text-sm">{artistNames}</p>
                     </div>
                   </DialogTitle>
                   <DialogDescription className="text-zinc-500">
@@ -171,23 +183,23 @@ function SongCard({
                 
                 <div className="space-y-6">
                   {/* Crowd Stats */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-zinc-800/50 rounded-lg p-4">
+                  <div className="gap-4 grid grid-cols-2">
+                    <div className="bg-zinc-800/50 p-4 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <Heart className="w-4 h-4 text-pink-400" />
-                        <span className="text-sm font-medium">Crowd Affinity</span>
+                        <span className="font-medium text-sm">Crowd Affinity</span>
                       </div>
-                      <div className="text-2xl font-bold text-pink-400">{Math.round(crowdAffinity)}%</div>
-                      <p className="text-xs text-zinc-400 mt-1">{affinityLevel.label}</p>
+                      <div className="font-bold text-pink-400 text-2xl">{Math.round(crowdAffinity)}%</div>
+                      <p className="mt-1 text-zinc-400 text-xs">{affinityLevel.label}</p>
                     </div>
                     
-                    <div className="bg-zinc-800/50 rounded-lg p-4">
+                    <div className="bg-zinc-800/50 p-4 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <Users className="w-4 h-4 text-blue-400" />
-                        <span className="text-sm font-medium">In Playlists</span>
+                        <span className="font-medium text-sm">In Playlists</span>
                       </div>
-                      <div className="text-2xl font-bold text-blue-400">{playlistCount}</div>
-                      <p className="text-xs text-zinc-400 mt-1">
+                      <div className="font-bold text-blue-400 text-2xl">{playlistCount}</div>
+                      <p className="mt-1 text-zinc-400 text-xs">
                         {playlistCount > 15 ? 'Very Popular' : playlistCount > 8 ? 'Popular' : 'Niche Pick'}
                       </p>
                     </div>
@@ -197,30 +209,30 @@ function SongCard({
                   {audioFeatures && (
                     <div className="space-y-3">
                       <h4 className="font-medium text-white">Audio Characteristics</h4>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="gap-4 grid grid-cols-2">
                         <div>
-                          <div className="flex justify-between text-sm mb-1">
+                          <div className="flex justify-between mb-1 text-sm">
                             <span className="text-zinc-400">Danceability</span>
                             <span className="text-white">{Math.round((audioFeatures.danceability || 0) * 100)}%</span>
                           </div>
                           <Progress value={(audioFeatures.danceability || 0) * 100} className="h-2" />
                         </div>
                         <div>
-                          <div className="flex justify-between text-sm mb-1">
+                          <div className="flex justify-between mb-1 text-sm">
                             <span className="text-zinc-400">Energy</span>
                             <span className="text-white">{Math.round((audioFeatures.energy || 0) * 100)}%</span>
                           </div>
                           <Progress value={(audioFeatures.energy || 0) * 100} className="h-2" />
                         </div>
                         <div>
-                          <div className="flex justify-between text-sm mb-1">
+                          <div className="flex justify-between mb-1 text-sm">
                             <span className="text-zinc-400">Positivity</span>
                             <span className="text-white">{Math.round((audioFeatures.valence || 0) * 100)}%</span>
                           </div>
                           <Progress value={(audioFeatures.valence || 0) * 100} className="h-2" />
                         </div>
                         <div>
-                          <div className="flex justify-between text-sm mb-1">
+                          <div className="flex justify-between mb-1 text-sm">
                             <span className="text-zinc-400">Tempo</span>
                             <span className="text-white">{Math.round(audioFeatures.tempo || 0)} BPM</span>
                           </div>
@@ -233,16 +245,16 @@ function SongCard({
                   {/* Transition Recommendations */}
                   {transitionSongs.length > 0 && (
                     <div className="space-y-3">
-                      <h4 className="font-medium text-white flex items-center gap-2">
+                      <h4 className="flex items-center gap-2 font-medium text-white">
                         <ArrowRight className="w-4 h-4 text-cyan-400" />
                         Great Transitions
                       </h4>
                       <div className="space-y-2 max-h-40 overflow-y-auto">
                         {transitionSongs.slice(0, 4).map((transition, index) => (
-                          <div key={index} className="flex items-center justify-between p-2 bg-zinc-800/50 rounded">
+                          <div key={index} className="flex justify-between items-center bg-zinc-800/50 p-2 rounded">
                             <div>
-                              <p className="text-sm font-medium text-white">{transition.name}</p>
-                              <p className="text-xs text-zinc-400">
+                              <p className="font-medium text-white text-sm">{transition.name}</p>
+                              <p className="text-zinc-400 text-xs">
                                 {transition.artists?.map(a => a.name).join(', ')}
                               </p>
                             </div>
@@ -266,7 +278,7 @@ function SongCard({
                 variant="ghost" 
                 size="sm" 
                 onClick={onRemove}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                className="hover:bg-red-500/10 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity"
               >
                 <X className="w-4 h-4" />
               </Button>
@@ -276,13 +288,15 @@ function SongCard({
 
         {/* Duration */}
         {duration && (
-          <div className="mt-2 text-xs text-zinc-500 text-right">
+          <div className="mt-2 text-zinc-500 text-xs text-right">
             {duration}
           </div>
         )}
       </CardContent>
     </Card>
   );
-}
+});
+
+SongCard.displayName = 'SongCard';
 
 export default SongCard;

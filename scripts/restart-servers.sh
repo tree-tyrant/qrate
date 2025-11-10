@@ -22,3 +22,4 @@ cd "$(dirname "$0")/.." || exit 1
 # Run the dev:all script
 npm run dev:all
 
+

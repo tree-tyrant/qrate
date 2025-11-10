@@ -264,8 +264,8 @@ const MOCK_TRACK_DATABASE: TrackSearchResult[] = [
 ];
 
 /**
- * Search for tracks using Spotify API (or other music API)
- * Falls back to mock data in demo mode
+ * Search for tracks using Spotify API via backend endpoint
+ * Falls back to mock data in demo mode or if backend/token unavailable
  */
 export async function searchTracks(
   query: string,
@@ -278,58 +278,66 @@ export async function searchTracks(
   try {
     console.log(`🔍 Searching for: "${query}"`);
     
-    // Get Spotify access token from storage
-    const accessToken = localStorage.getItem('spotify_access_token');
+    // Get DJ Spotify access token from storage
+    const accessToken = localStorage.getItem('dj_spotify_access_token');
     if (!accessToken) {
-      console.log('💡 Using mock search (no Spotify token available)');
-      
-      // Use mock database for demo mode
-      const normalizedQuery = query.toLowerCase().trim();
-      const results = MOCK_TRACK_DATABASE.filter(track => 
-        track.name.toLowerCase().includes(normalizedQuery) ||
-        track.artist.toLowerCase().includes(normalizedQuery) ||
-        track.album.toLowerCase().includes(normalizedQuery)
-      ).slice(0, limit);
-      
-      console.log(`✅ Found ${results.length} mock results`);
-      return results;
+      console.log('💡 Using mock search (no DJ Spotify token available)');
+      return getMockSearchResults(query, limit);
     }
     
-    // Call Spotify Search API
-    const response = await fetch(
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      }
-    );
+    // Import apiCall dynamically to avoid circular dependencies
+    const { apiCall } = await import('./api');
     
-    if (!response.ok) {
-      console.error('Spotify search failed:', response.status);
-      return [];
+    // Call backend Spotify Search API endpoint
+    const response = await apiCall<{ success: boolean; tracks?: any[] }>('/spotify/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: query.trim(),
+        access_token: accessToken,
+        limit: limit
+      })
+    });
+    
+    if (!response.success || !response.data?.tracks) {
+      console.log('⚠️ Backend search unavailable, falling back to mock data');
+      return getMockSearchResults(query, limit);
     }
     
-    const data = await response.json();
-    
-    const results: TrackSearchResult[] = data.tracks.items.map((track: any) => ({
-      trackId: track.id,
-      name: track.name,
-      artist: track.artists.map((a: any) => a.name).join(', '),
-      album: track.album.name,
-      albumArt: track.album.images[0]?.url,
-      duration: track.duration_ms,
-      releaseYear: track.album.release_date ? parseInt(track.album.release_date.split('-')[0]) : undefined,
-      explicit: track.explicit
+    // Map backend response format to TrackSearchResult format
+    const results: TrackSearchResult[] = response.data.tracks.map((track: any) => ({
+      trackId: track.id || track.spotifyTrackId,
+      name: track.trackName || track.name,
+      artist: track.artistName || track.artist || 'Unknown Artist',
+      album: track.albumName || track.album || '',
+      albumArt: track.albumArt,
+      duration: track.durationMs || track.duration,
+      releaseYear: track.releaseYear,
+      explicit: track.explicit || false
     }));
     
-    console.log(`✅ Found ${results.length} results`);
+    console.log(`✅ Found ${results.length} results from Spotify`);
     return results;
     
   } catch (error) {
     console.error('Error searching tracks:', error);
-    return [];
+    console.log('💡 Falling back to mock search results');
+    return getMockSearchResults(query, limit);
   }
+}
+
+/**
+ * Get mock search results for demo/fallback mode
+ */
+function getMockSearchResults(query: string, limit: number): TrackSearchResult[] {
+  const normalizedQuery = query.toLowerCase().trim();
+  const results = MOCK_TRACK_DATABASE.filter(track => 
+    track.name.toLowerCase().includes(normalizedQuery) ||
+    track.artist.toLowerCase().includes(normalizedQuery) ||
+    track.album.toLowerCase().includes(normalizedQuery)
+  ).slice(0, limit);
+  
+  console.log(`✅ Found ${results.length} mock results`);
+  return results;
 }
 
 /**

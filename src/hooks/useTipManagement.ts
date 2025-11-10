@@ -2,7 +2,7 @@
 // Handles tip tracking and notifications
 
 import { useEffect } from 'react';
-import { utils } from '../utils/api';
+import { utils } from '@/utils/api';
 
 interface UseTipManagementProps {
   eventId: string;

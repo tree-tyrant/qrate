@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS events (
 
 -- Create index on event code for fast lookups
 CREATE INDEX IF NOT EXISTS idx_events_code ON events(code);
+-- Create index on host_id for fast lookups
+CREATE INDEX IF NOT EXISTS idx_events_host_id ON events(host_id);
 
 -- Create guest_preferences table
 CREATE TABLE IF NOT EXISTS guest_preferences (
@@ -156,4 +158,5 @@ CREATE TABLE IF NOT EXISTS request_analytics (
 -- Create indexes for request_analytics
 CREATE INDEX IF NOT EXISTS idx_request_analytics_event_code ON request_analytics(event_code);
 CREATE INDEX IF NOT EXISTS idx_request_analytics_metric ON request_analytics(event_code, metric_name, timestamp DESC);
+
 

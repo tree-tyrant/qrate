@@ -7,23 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { ArrowLeft, Save, Trash2, Upload, X } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-
-interface Event {
-  id: string;
-  eventName: string;
-  eventTheme: string;
-  eventDescription?: string;
-  code: string;
-  date: string;
-  time: string;
-  location?: string;
-  status: 'past' | 'live' | 'upcoming';
-  guestCount: number;
-  eventImage?: string;
-}
+import { toast } from 'sonner';
+import type { Event as QRateEvent } from '@/utils/types';
 
 interface EventEditorProps {
-  event: Event;
+  event: QRateEvent;
   onEventUpdated: (eventData: {
     name: string;
     theme: string;
@@ -32,11 +20,9 @@ interface EventEditorProps {
     time: string;
     endTime?: string;
     location?: string;
-    vibes?: string[];
-    genre?: string;
     imageUrl?: string;
-  }) => void;
-  onEventTrashed?: (event: Event) => void;
+  }) => Promise<void>;
+  onEventTrashed?: (event: QRateEvent) => void;
   onBack: () => void;
   isLoading?: boolean;
 }
@@ -51,30 +37,48 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
   const [selectedVibes, setSelectedVibes] = useState<string[]>([event.eventTheme || '']);
   const [selectedImage, setSelectedImage] = useState<string>(event.eventImage || '');
   const [uploadedImage, setUploadedImage] = useState<string>('');
+  const [eventDescription, setEventDescription] = useState<string>(event.eventDescription || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleUpdateEvent = () => {
+  // Re-hydrate local state when the provided event changes
+  useEffect(() => {
+    setEventName(event.eventName);
+    setEventDate(event.date);
+    setEventTime(event.time);
+    setEventLocation(event.location || '');
+    setSelectedImage(event.eventImage || '');
+    setUploadedImage('');
+    setSelectedVibes([event.eventTheme || '']);
+    setEventDescription(event.eventDescription || '');
+  }, [event]);
+
+  const handleUpdateEvent = async () => {
     if (!eventName.trim() || selectedVibes.length === 0 || !eventDate || !eventTime) return;
 
-    setIsUpdating(true);
-    
-    const eventData = {
-      name: eventName.trim(),
-      theme: selectedVibes[0],
-      description: `${selectedVibes.join(', ')} event`,
-      date: eventDate,
-      time: eventTime,
-      endTime: eventEndTime || undefined,
-      location: eventLocation.trim() || undefined,
-      vibes: selectedVibes,
-      genre: selectedGenre || undefined,
-      imageUrl: uploadedImage || selectedImage || undefined
-    };
+    try {
+      setIsUpdating(true);
+      
+      const eventData = {
+        name: eventName.trim(),
+        theme: selectedVibes[0],
+        description: eventDescription.trim(),
+        date: eventDate,
+        time: eventTime,
+        // UI-only fields are kept local; we do not persist them to backend
+        endTime: undefined,
+        location: eventLocation.trim() || undefined,
+        imageUrl: uploadedImage || selectedImage || undefined
+      };
 
-    onEventUpdated(eventData);
-    setIsUpdating(false);
+      await onEventUpdated(eventData);
+      toast.success('Event updated successfully');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update event');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleTrashEvent = () => {
@@ -124,11 +128,12 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
     'https://images.unsplash.com/photo-1574155376612-bfa4ed8aabfd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxuaWdodGNsdWJ8ZW58MXx8fHwxNzYwMTY1NDg0fDA&ixlib=rb-4.1.0&q=80&w=1080'
   ];
 
+  // Single-select primary theme for clarity
   const toggleVibe = (vibe: string) => {
     if (selectedVibes.includes(vibe)) {
-      setSelectedVibes(selectedVibes.filter(v => v !== vibe));
+      setSelectedVibes([]);
     } else {
-      setSelectedVibes([...selectedVibes, vibe]);
+      setSelectedVibes([vibe]);
     }
   };
 
@@ -147,32 +152,32 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
   const currentImage = uploadedImage || selectedImage;
 
   return (
-    <div className="min-h-screen bg-background py-4">
-      <div className="container mx-auto px-4 max-w-4xl">
+    <div className="bg-background py-4 min-h-screen">
+      <div className="mx-auto px-4 max-w-4xl container">
         <Button 
           variant="ghost" 
           onClick={onBack} 
-          className="mb-3 glass-effect border border-border/30 hover:border-primary/50"
+          className="mb-3 border border-border/30 hover:border-primary/50 glass-effect"
           size="sm"
           disabled={isLoading}
         >
-          <ArrowLeft className="w-4 h-4 mr-2" />
+          <ArrowLeft className="mr-2 w-4 h-4" />
           Back
         </Button>
 
         {/* Event Code Display */}
-        <div className="glass-effect p-3 rounded-lg text-center mb-3 border border-cyan-500/30">
-          <p className="text-xs text-muted-foreground mb-1">Event Code</p>
-          <p className="font-mono text-xl font-bold gradient-text">{event.code}</p>
+        <div className="mb-3 p-3 border border-cyan-500/30 rounded-lg text-center glass-effect">
+          <p className="mb-1 text-muted-foreground text-xs">Event Code</p>
+          <p className="font-mono font-bold text-xl gradient-text">{event.code}</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="gap-3 grid grid-cols-1 lg:grid-cols-2">
           {/* Left Column - Event Details */}
-          <Card className="glass-effect border-cyan-500/30">
+          <Card className="border-cyan-500/30 glass-effect">
             <CardHeader className="pb-3">
               <CardTitle className="text-cyan-400 text-lg">Event Details</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 flex flex-col h-full">
+            <CardContent className="flex flex-col space-y-3 h-full">
               {/* Event Name */}
               <div className="space-y-1">
                 <Label htmlFor="event-name" className="text-muted-foreground text-xs">Event Name</Label>
@@ -184,10 +189,13 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
                   className="bg-input-background border-border/50 focus:border-cyan-500/50 h-8 text-sm"
                   disabled={isLoading}
                 />
+                {!eventName.trim() && (
+                  <div className="text-[10px] text-red-400">Event name is required</div>
+                )}
               </div>
 
               {/* Date and Location Row */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="gap-2 grid grid-cols-2">
                 <div className="space-y-1">
                   <Label htmlFor="event-date" className="text-muted-foreground text-xs">Date</Label>
                   <Input
@@ -199,6 +207,9 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
                     className="bg-input-background border-border/50 focus:border-cyan-500/50 h-8 text-sm"
                     disabled={isLoading}
                   />
+                  {!eventDate && (
+                    <div className="text-[10px] text-red-400">Date is required</div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="location" className="text-muted-foreground text-xs">Location (Optional)</Label>
@@ -214,7 +225,7 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
               </div>
 
               {/* Start Time and End Time Row */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="gap-2 grid grid-cols-2">
                 <div className="space-y-1">
                   <Label htmlFor="event-time" className="text-muted-foreground text-xs">Start Time</Label>
                   <Input
@@ -225,6 +236,9 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
                     className="bg-input-background border-border/50 focus:border-cyan-500/50 h-8 text-sm"
                     disabled={isLoading}
                   />
+                  {!eventTime && (
+                    <div className="text-[10px] text-red-400">Start time is required</div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="end-time" className="text-muted-foreground text-xs">End Time (Optional)</Label>
@@ -237,6 +251,19 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
                     disabled={isLoading}
                   />
                 </div>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1">
+                <Label htmlFor="event-description" className="text-muted-foreground text-xs">Description</Label>
+                <textarea
+                  id="event-description"
+                  placeholder="Describe your event..."
+                  value={eventDescription}
+                  onChange={(e) => setEventDescription(e.target.value)}
+                  className="bg-input-background p-2 border border-border/50 focus:border-cyan-500/50 rounded-md w-full min-h-[72px] text-sm resize-y"
+                  disabled={isLoading}
+                />
               </div>
 
               {/* Genre Selection */}
@@ -257,18 +284,18 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
               </div>
 
               {/* Action Buttons - at bottom */}
-              <div className="pt-2 mt-auto space-y-2">
+              <div className="space-y-2 mt-auto pt-2">
                 {/* Help Text */}
-                <div className="text-center text-xs text-muted-foreground pb-2 border-b border-border/30">
+                <div className="pb-2 border-border/30 border-b text-muted-foreground text-xs text-center">
                   Changes will be saved to your event
                 </div>
                 
                 <Button 
                   onClick={handleUpdateEvent}
                   disabled={!eventName.trim() || selectedVibes.length === 0 || !eventDate || !eventTime || isUpdating || isLoading}
-                  className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-700 hover:to-cyan-600 shadow-lg shadow-cyan-500/20 h-9 text-sm transition-transform hover:scale-105 active:scale-95"
+                  className="bg-gradient-to-r from-cyan-600 hover:from-cyan-700 to-cyan-500 hover:to-cyan-600 shadow-cyan-500/20 shadow-lg w-full h-9 text-sm hover:scale-105 active:scale-95 transition-transform"
                 >
-                  <Save className="w-3 h-3 mr-2" />
+                  <Save className="mr-2 w-3 h-3" />
                   {isUpdating ? 'Saving Changes...' : 'Save Changes'}
                 </Button>
 
@@ -278,16 +305,16 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
                     <AlertDialogTrigger asChild>
                       <Button 
                         variant="outline"
-                        className="w-full border-destructive/40 text-destructive hover:bg-destructive/20 hover:border-destructive/60 h-9 text-sm"
+                        className="hover:bg-destructive/20 border-destructive/40 hover:border-destructive/60 w-full h-9 text-destructive text-sm"
                         disabled={isLoading}
                       >
-                        <Trash2 className="w-3 h-3 mr-2" />
+                        <Trash2 className="mr-2 w-3 h-3" />
                         Move to Trash
                       </Button>
                     </AlertDialogTrigger>
-                    <AlertDialogContent className="glass-effect border-destructive/30 text-white">
+                    <AlertDialogContent className="border-destructive/30 text-white glass-effect">
                       <AlertDialogHeader>
-                        <AlertDialogTitle className="text-white flex items-center gap-2">
+                        <AlertDialogTitle className="flex items-center gap-2 text-white">
                           <Trash2 className="w-5 h-5 text-destructive" />
                           Move Event to Trash?
                         </AlertDialogTitle>
@@ -297,7 +324,7 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel className="glass-effect border-border/40 text-white hover:bg-white/10">
+                        <AlertDialogCancel className="hover:bg-white/10 border-border/40 text-white glass-effect">
                           Cancel
                         </AlertDialogCancel>
                         <AlertDialogAction 
@@ -315,16 +342,16 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
           </Card>
 
           {/* Right Column - Vibe & Style */}
-          <Card className="glass-effect border-purple-500/40">
+          <Card className="border-purple-500/40 glass-effect">
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg text-purple-400">Vibe & Style</CardTitle>
+              <CardTitle className="text-purple-400 text-lg">Vibe & Style</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {/* Image Selection */}
               <div className="space-y-2">
                 <Label className="text-muted-foreground text-xs">Event Poster (Optional)</Label>
                 
-                <div className="grid grid-cols-5 gap-1.5">
+                <div className="gap-1.5 grid grid-cols-5">
                   {stockImages.map((img, idx) => (
                     <button
                       key={idx}
@@ -364,7 +391,7 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
 
                 {/* Show uploaded image preview */}
                 {uploadedImage && (
-                  <div className="relative aspect-video rounded-lg overflow-hidden border-2 border-purple-500/50">
+                  <div className="relative border-2 border-purple-500/50 rounded-lg aspect-video overflow-hidden">
                     <ImageWithFallback
                       src={uploadedImage}
                       alt="Uploaded poster"
@@ -372,7 +399,7 @@ function EventEditor({ event, onEventUpdated, onEventTrashed, onBack, isLoading 
                     />
                     <button
                       onClick={() => setUploadedImage('')}
-                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-black/80 transition-all"
+                      className="top-1 right-1 absolute flex justify-center items-center bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full w-5 h-5 transition-all"
                     >
                       <X className="w-3 h-3 text-white" />
                     </button>

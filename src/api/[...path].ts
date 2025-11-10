@@ -217,7 +217,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const guestId = preferences.guestId || `guest_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`;
 
       if (supabase) {
-        const tracksData = preferences.tracksData || preferences.tracks || [];
+        // Extract source from additionalPreferences if nested
+        const source = preferences.source || preferences.additionalPreferences?.source || 'manual';
+        
+        // Extract tracksData from guestContribution if provided (Spotify OAuth flow)
+        let tracksData = preferences.tracksData || preferences.tracks || [];
+        if (!tracksData.length && preferences.guestContribution?.tracks) {
+          // Transform guestContribution tracks to tracksData format
+          tracksData = preferences.guestContribution.tracks.map((track: any) => ({
+            id: track.id,
+            name: track.name,
+            artist: track.artist,
+            artists: [track.artist],
+            album: undefined,
+            popularity: 0
+          }));
+        }
+        
         const stats = preferences.stats || {};
         const now = new Date().toISOString();
 
@@ -228,8 +244,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           genres: Array.isArray(preferences.genres) ? preferences.genres : (preferences.genres || []),
           recent_tracks: Array.isArray(preferences.recentTracks) ? preferences.recentTracks : (preferences.recentTracks || []),
           spotify_playlists: Array.isArray(preferences.spotifyPlaylists) ? preferences.spotifyPlaylists : (preferences.spotifyPlaylists || []),
-          spotify_analyzed: preferences.spotifyAnalyzed || preferences.source === 'spotify',
-          source: preferences.source || 'manual',
+          spotify_analyzed: preferences.spotifyAnalyzed || source === 'spotify',
+          source: source,
           tracks_data: tracksData,
           stats: stats,
           submitted_at: now,
@@ -250,7 +266,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           for (const track of tracksData) {
             const trackId = track.id;
             const trackName = track.name;
-            const artistName = Array.isArray(track.artists) ? track.artists[0] : (track.artists || 'Unknown Artist');
+            // Handle both artist (string) and artists (array) formats
+            const artistName = Array.isArray(track.artists) 
+              ? track.artists[0] 
+              : (track.artists || track.artist || 'Unknown Artist');
             const albumName = track.album || null;
             const popularity = track.popularity || 0;
 
@@ -299,7 +318,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return sendError(res, 500, 'Spotify integration not configured', null, 'Set SPOTIFY_CLIENT_ID in config.ts');
       }
 
-      const scopes = 'user-read-private playlist-read-private playlist-read-collaborative user-follow-read';
+      const scopes = 'user-read-private user-read-email playlist-read-private playlist-read-collaborative user-follow-read user-top-read user-library-read';
       const redirectUri = config.spotify.guestRedirectUri || `${req.headers.origin || 'https://localhost:3000'}/guest`;
       const state = Math.random().toString(36).substring(7);
 
@@ -308,7 +327,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `client_id=${clientId}&` +
         `scope=${encodeURIComponent(scopes)}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        `state=${state}`;
+        `state=${state}&` +
+        `show_dialog=true`;
 
       return sendSuccess(res, { success: true, auth_url: authUrl });
     }
@@ -721,7 +741,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `client_id=${clientId}&` +
         `scope=${encodeURIComponent(scopes)}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        `state=${state}`;
+        `state=${state}&` +
+        `show_dialog=true`;
 
       return sendSuccess(res, { success: true, auth_url: authUrl });
     }

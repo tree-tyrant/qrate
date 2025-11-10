@@ -6,7 +6,7 @@ import { QrCode, Share2, Copy, Check, ArrowLeft, Calendar, Music, MapPin, Headph
 import { motion } from 'motion/react';
 import { utils } from '../utils/api';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import logoImage from 'figma:asset/08d0d06dd14cd5a887d78962b507773b63dedad4.png';
+import logoImage from '../assets/qrate_title.png';
 
 interface QRCodeDisplayProps {
   event: any;
@@ -71,10 +71,10 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
   };
   
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="relative flex justify-center items-center p-4 min-h-screen overflow-hidden">
       {/* Synthwave background gradient */}
       <div 
-        className="fixed inset-0 z-0 opacity-30"
+        className="z-0 fixed inset-0 opacity-30"
         style={{
           background: `
             radial-gradient(circle at 40% 40%, #8b5cf6 0%, transparent 50%),
@@ -86,35 +86,35 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
       />
 
       {/* Content wrapper - matches PromotionModal size */}
-      <div className="relative z-10 w-full max-w-4xl">
+      <div className="z-10 relative w-full max-w-4xl">
         {/* Header with QRate logo and back button */}
-        <div className="mb-4 flex items-center justify-between">
+        <div className="flex justify-between items-center mb-4">
           {/* QRate Logo - Clickable */}
           <button
             onClick={onLogoClick}
-            className="group transition-all duration-300 hover:scale-105"
+            className="group hover:scale-105 transition-all duration-300"
           >
             <ImageWithFallback 
               src={logoImage} 
               alt="QRate" 
-              className="h-12 w-auto object-contain transition-all duration-300 group-hover:scale-105 group-hover:drop-shadow-[0_0_20px_rgba(255,0,110,0.6)]"
+              className="group-hover:drop-shadow-[0_0_20px_rgba(255,0,110,0.6)] w-auto h-12 object-contain group-hover:scale-105 transition-all duration-300"
             />
           </button>
           
           <Button 
             onClick={onBack} 
             variant="ghost"
-            className="glass-effect border border-border/30 hover:border-primary/50 transition-all duration-300"
+            className="border border-border/30 hover:border-primary/50 transition-all duration-300 glass-effect"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            <ArrowLeft className="mr-2 w-4 h-4" />
             Back to Dashboard
           </Button>
         </div>
 
         {/* Main content - modal-like container */}
-        <div className="glass-effect border border-border/50 rounded-lg shadow-2xl max-h-[85vh] overflow-y-auto">
+        <div className="shadow-2xl border border-border/50 rounded-lg max-h-[85vh] overflow-y-auto glass-effect">
           <div className="p-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+            <div className="gap-4 lg:gap-6 grid grid-cols-1 lg:grid-cols-2">
               
               {/* Left Column - Event Info & QR Code */}
               <div className="space-y-4">
@@ -123,24 +123,24 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5 }}
-                  className="text-center lg:text-left space-y-4"
+                  className="space-y-4 lg:text-left text-center"
                 >
                   <div>
-                    <Badge className="bg-gradient-to-r from-primary to-accent text-white mb-3">
+                    <Badge className="bg-gradient-to-r from-primary to-accent mb-3 text-white">
                       Event Code: {event.code}
                     </Badge>
-                    <h1 className="gradient-text text-3xl sm:text-4xl lg:text-5xl mb-3">
+                    <h1 className="mb-3 text-3xl sm:text-4xl lg:text-5xl gradient-text">
                       {event.eventName || event.name}
                     </h1>
                   </div>
                   
                   <div className="space-y-1 text-muted-foreground text-sm">
-                    <div className="flex items-center gap-2 justify-center lg:justify-start">
+                    <div className="flex justify-center lg:justify-start items-center gap-2">
                       <Music className="w-3 h-3 text-primary" />
                       <span>{event.eventTheme || event.theme}</span>
                     </div>
                     {event.date && (
-                      <div className="flex items-center gap-2 justify-center lg:justify-start">
+                      <div className="flex justify-center lg:justify-start items-center gap-2">
                         <Calendar className="w-3 h-3 text-accent" />
                         <span>
                           {new Date(event.date).toLocaleDateString('en-US', { 
@@ -153,7 +153,7 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
                       </div>
                     )}
                     {event.location && (
-                      <div className="flex items-center gap-2 justify-center lg:justify-start">
+                      <div className="flex justify-center lg:justify-start items-center gap-2">
                         <MapPin className="w-3 h-3 text-primary" />
                         <span>{event.location}</span>
                       </div>
@@ -167,12 +167,12 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.5, delay: 0.1 }}
                 >
-                  <Card className="glass-effect border-primary/30 hover:border-primary/60 transition-all duration-300 overflow-hidden relative group">
+                  <Card className="group relative border-primary/30 hover:border-primary/60 overflow-hidden transition-all duration-300 glass-effect">
                     {/* Glow effect */}
                     <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-accent/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     
-                    <CardHeader className="text-center relative z-10">
-                      <CardTitle className="text-white flex items-center justify-center gap-2">
+                    <CardHeader className="z-10 relative text-center">
+                      <CardTitle className="flex justify-center items-center gap-2 text-white">
                         <QrCode className="w-5 h-5 text-primary" />
                         Guest QR Code
                       </CardTitle>
@@ -181,21 +181,21 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
                       </CardDescription>
                     </CardHeader>
                     
-                    <CardContent className="space-y-4 relative z-10">
+                    <CardContent className="z-10 relative space-y-4">
                       {/* QR Code with responsive sizing */}
-                      <div className="bg-white p-3 sm:p-4 rounded-xl mx-auto w-fit">
+                      <div className="bg-white mx-auto p-3 sm:p-4 rounded-xl w-fit">
                         {!qrError ? (
                           <img 
                             src={qrCodeUrl} 
                             alt="QR Code for event access" 
-                            className="w-40 h-40 sm:w-48 sm:h-48 lg:w-56 lg:h-56 mx-auto"
+                            className="mx-auto w-40 sm:w-48 lg:w-56 h-40 sm:h-48 lg:h-56"
                             onError={handleQrError}
                             loading="lazy"
                           />
                         ) : (
-                          <div className="w-40 h-40 sm:w-48 sm:h-48 lg:w-56 lg:h-56 mx-auto flex items-center justify-center bg-gray-100 text-gray-600">
-                            <div className="text-center space-y-2">
-                              <QrCode className="w-10 h-10 mx-auto" />
+                          <div className="flex justify-center items-center bg-gray-100 mx-auto w-40 sm:w-48 lg:w-56 h-40 sm:h-48 lg:h-56 text-gray-600">
+                            <div className="space-y-2 text-center">
+                              <QrCode className="mx-auto w-10 h-10" />
                               <p className="font-medium text-sm">QR Code</p>
                               <p className="text-xs">Use link below</p>
                             </div>
@@ -205,31 +205,31 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
                       
                       {/* Share Link Section */}
                       <div className="space-y-3">
-                        <p className="text-sm text-center text-muted-foreground">
+                        <p className="text-muted-foreground text-sm text-center">
                           Or share this link directly:
                         </p>
                         
-                        <div className="glass-effect p-3 sm:p-4 rounded-lg border border-border/30">
-                          <p className="text-xs sm:text-sm text-foreground/90 break-all font-mono text-center">
+                        <div className="p-3 sm:p-4 border border-border/30 rounded-lg glass-effect">
+                          <p className="font-mono text-foreground/90 text-xs sm:text-sm text-center break-all">
                             {guestUrl}
                           </p>
                         </div>
                         
                         {/* Action Buttons */}
-                        <div className="flex flex-col sm:flex-row gap-3">
+                        <div className="flex sm:flex-row flex-col gap-3">
                           <Button 
                             onClick={handleCopyUrl}
                             variant="outline" 
-                            className="flex-1 glass-effect border-primary/40 text-white hover:bg-primary/20 hover:border-primary/60 transition-all duration-300"
+                            className="flex-1 hover:bg-primary/20 border-primary/40 hover:border-primary/60 text-white transition-all duration-300 glass-effect"
                           >
                             {copied ? (
                               <>
-                                <Check className="w-4 h-4 mr-2" />
+                                <Check className="mr-2 w-4 h-4" />
                                 Copied!
                               </>
                             ) : (
                               <>
-                                <Copy className="w-4 h-4 mr-2" />
+                                <Copy className="mr-2 w-4 h-4" />
                                 Copy Link
                               </>
                             )}
@@ -238,9 +238,9 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
                           <Button 
                             onClick={handleShare}
                             variant="outline" 
-                            className="flex-1 glass-effect border-accent/40 text-white hover:bg-accent/20 hover:border-accent/60 transition-all duration-300"
+                            className="flex-1 hover:bg-accent/20 border-accent/40 hover:border-accent/60 text-white transition-all duration-300 glass-effect"
                           >
-                            <Share2 className="w-4 h-4 mr-2" />
+                            <Share2 className="mr-2 w-4 h-4" />
                             Share
                           </Button>
                         </div>
@@ -258,7 +258,7 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: 0.2 }}
                 >
-                  <Card className="glass-effect border-accent/30 hover:border-accent/60 transition-all duration-300">
+                  <Card className="border-accent/30 hover:border-accent/60 transition-all duration-300 glass-effect">
                     <CardHeader>
                       <CardTitle className="text-white">How Guests Use This</CardTitle>
                       <CardDescription className="text-muted-foreground">
@@ -268,48 +268,48 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
                     <CardContent className="space-y-3">
                       <div className="space-y-2">
                         <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 bg-gradient-to-r from-primary to-accent rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                          <div className="flex flex-shrink-0 justify-center items-center bg-gradient-to-r from-primary to-accent rounded-full w-6 h-6 font-bold text-white text-xs">
                             1
                           </div>
                           <div>
-                            <p className="text-white font-medium text-sm">Scan QR Code</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="font-medium text-white text-sm">Scan QR Code</p>
+                            <p className="mt-0.5 text-muted-foreground text-xs">
                               Use phone camera to scan the code above
                             </p>
                           </div>
                         </div>
                         
                         <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 bg-gradient-to-r from-primary to-accent rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                          <div className="flex flex-shrink-0 justify-center items-center bg-gradient-to-r from-primary to-accent rounded-full w-6 h-6 font-bold text-white text-xs">
                             2
                           </div>
                           <div>
-                            <p className="text-white font-medium text-sm">Connect Account</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="font-medium text-white text-sm">Connect Account</p>
+                            <p className="mt-0.5 text-muted-foreground text-xs">
                               Link Spotify or enter preferences manually
                             </p>
                           </div>
                         </div>
                         
                         <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 bg-gradient-to-r from-primary to-accent rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                          <div className="flex flex-shrink-0 justify-center items-center bg-gradient-to-r from-primary to-accent rounded-full w-6 h-6 font-bold text-white text-xs">
                             3
                           </div>
                           <div>
-                            <p className="text-white font-medium text-sm">Share Preferences</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="font-medium text-white text-sm">Share Preferences</p>
+                            <p className="mt-0.5 text-muted-foreground text-xs">
                               Tell us about their music taste
                             </p>
                           </div>
                         </div>
                         
                         <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 bg-gradient-to-r from-primary to-accent rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                          <div className="flex flex-shrink-0 justify-center items-center bg-gradient-to-r from-primary to-accent rounded-full w-6 h-6 font-bold text-white text-xs">
                             4
                           </div>
                           <div>
-                            <p className="text-white font-medium text-sm">Enjoy the Party!</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="font-medium text-white text-sm">Enjoy the Party!</p>
+                            <p className="mt-0.5 text-muted-foreground text-xs">
                               AI creates the perfect playlist for everyone
                             </p>
                           </div>
@@ -325,33 +325,33 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: 0.3 }}
                 >
-                  <Card className="glass-effect border-green-500/30 hover:border-green-500/60 transition-all duration-300 overflow-hidden relative group">
+                  <Card className="group relative border-green-500/30 hover:border-green-500/60 overflow-hidden transition-all duration-300 glass-effect">
                     {/* Animated gradient background */}
                     <div className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     
-                    <CardContent className="p-4 text-center relative z-10">
-                      <div className="w-12 h-12 mx-auto mb-3 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center">
+                    <CardContent className="z-10 relative p-4 text-center">
+                      <div className="flex justify-center items-center bg-gradient-to-r from-green-500 to-blue-500 mx-auto mb-3 rounded-full w-12 h-12">
                         <QrCode className="w-6 h-6 text-white" />
                       </div>
                       
-                      <h3 className="text-lg text-white mb-2">Test the Experience</h3>
-                      <p className="text-xs text-muted-foreground mb-4">
+                      <h3 className="mb-2 text-white text-lg">Test the Experience</h3>
+                      <p className="mb-4 text-muted-foreground text-xs">
                         See exactly what your guests will experience when they scan the QR code
                       </p>
                       
                       <Button 
                         onClick={onSimulateGuest}
-                        className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white shadow-lg shadow-green-500/20 transition-all duration-300 hover:shadow-green-500/40 mb-3"
+                        className="bg-gradient-to-r from-green-500 hover:from-green-600 to-blue-500 hover:to-blue-600 shadow-green-500/20 shadow-lg hover:shadow-green-500/40 mb-3 w-full text-white transition-all duration-300"
                       >
-                        <QrCode className="w-4 h-4 mr-2" />
+                        <QrCode className="mr-2 w-4 h-4" />
                         Simulate Guest Experience
                       </Button>
 
                       <Button 
                         onClick={onEnterDJBooth}
-                        className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/20 transition-all duration-300 hover:shadow-purple-500/40"
+                        className="bg-gradient-to-r from-purple-500 hover:from-purple-600 to-pink-500 hover:to-pink-600 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 w-full text-white transition-all duration-300"
                       >
-                        <Headphones className="w-4 h-4 mr-2" />
+                        <Headphones className="mr-2 w-4 h-4" />
                         Enter DJ Booth
                       </Button>
                     </CardContent>
@@ -364,20 +364,20 @@ function QRCodeDisplay({ event, onBack, onEnterDJBooth, onSimulateGuest, onLogoC
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: 0.4 }}
                 >
-                  <Card className="glass-effect border-border/30">
+                  <Card className="border-border/30 glass-effect">
                     <CardContent className="p-6">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="gap-4 grid grid-cols-2">
                         <div className="text-center">
-                          <div className="text-3xl gradient-text mb-1">
+                          <div className="mb-1 text-3xl gradient-text">
                             {event.guestCount || 0}
                           </div>
-                          <div className="text-sm text-muted-foreground">Guests Joined</div>
+                          <div className="text-muted-foreground text-sm">Guests Joined</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-3xl gradient-text mb-1">
+                          <div className="mb-1 text-3xl gradient-text">
                             {event.preferences?.length || 0}
                           </div>
-                          <div className="text-sm text-muted-foreground">Preferences</div>
+                          <div className="text-muted-foreground text-sm">Preferences</div>
                         </div>
                       </div>
                     </CardContent>

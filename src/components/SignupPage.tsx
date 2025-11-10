@@ -7,7 +7,7 @@ import { ArrowLeft, UserPlus, Mail, Lock, User, Eye, EyeOff, Sparkles, PartyPopp
 import { motion } from 'motion/react';
 
 interface SignupPageProps {
-  onSignup: (username: string, password: string, email: string) => boolean;
+  onSignup: (username: string, password: string, email: string) => Promise<boolean>;
   onBack: () => void;
   onSignIn: () => void;
 }
@@ -41,7 +41,7 @@ function SignupPage({ onSignup, onBack, onSignIn }: SignupPageProps) {
     // Add a small delay for better UX
     await new Promise(resolve => setTimeout(resolve, 600));
 
-    const success = onSignup(username, password, email);
+    const success = await onSignup(username, password, email);
     if (!success) {
       setError('Username already exists. Please choose a different one.');
     }

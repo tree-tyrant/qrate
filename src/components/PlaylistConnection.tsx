@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Badge } from './ui/badge';
 import { Music, Users, Clock, ArrowLeft, Check, Loader2, AlertCircle, Apple } from 'lucide-react';
 import { spotifyApi, utils } from '../utils/api';
+import { STORAGE_KEYS, SPOTIFY_OAUTH_VERSION } from '../utils/constants';
 
 interface Playlist {
   id: string;
@@ -51,13 +52,87 @@ function PlaylistConnection({ onPlaylistSelected, onBack, isLoading: parentLoadi
     }
   }, []);
 
+  const handleSpotifyCallback = async (code: string) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Exchange code for access token via backend
+      const response = await spotifyApi.exchangeDJCode(code);
+      
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Failed to exchange code for token');
+      }
+
+      const { access_token, refresh_token, expires_in } = response.data;
+      
+      if (!access_token) {
+        throw new Error('No access token received from backend');
+      }
+
+      console.log('✅ Successfully exchanged code for Spotify access token');
+      
+      // Store tokens
+      utils.storage.set('spotify_access_token', access_token);
+      if (refresh_token) {
+        utils.storage.set('spotify_refresh_token', refresh_token);
+      }
+      if (expires_in) {
+        const expiresAt = Date.now() + (parseInt(expires_in) * 1000);
+        utils.storage.set('spotify_expires_at', expiresAt);
+      }
+      
+      // Update OAuth version to match current scopes
+      utils.storage.set(STORAGE_KEYS.SPOTIFY_OAUTH_VERSION, SPOTIFY_OAUTH_VERSION);
+      
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Mark as connected and fetch playlists
+      setSpotifyConnected(true);
+      await fetchSpotifyPlaylists();
+      
+    } catch (error: any) {
+      console.error('❌ Error exchanging Spotify code:', error);
+      setError(error.message || 'Failed to complete Spotify authentication. Please try again.');
+      setLoading(false);
+      // Clean URL even on error
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  };
+
+  // Handle Spotify OAuth callback when redirected back from Spotify
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const error = urlParams.get('error');
+    
+    // If we have an error from Spotify, show it
+    if (error) {
+      console.error('❌ Spotify OAuth error:', error);
+      setError(`Spotify authentication failed: ${error}`);
+      setLoading(false);
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+    
+    // If we have a code, exchange it for tokens
+    if (code) {
+      console.log('🎵 Spotify OAuth callback received, exchanging code for tokens...');
+      handleSpotifyCallback(code);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const connectToSpotify = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      console.log('🔄 Connecting to Spotify for playlist access...');
-      const response = await spotifyApi.getAuthUrl('PLAYLIST_ACCESS');
+      console.log('🔄 Connecting to Spotify for DJ playlist access...');
+      // Use DJ-specific auth endpoint
+      const response = await spotifyApi.getDJAuthUrl();
       
       if (response.success && response.data?.auth_url) {
         console.log('✅ Redirecting to Spotify auth...');
@@ -65,11 +140,11 @@ function PlaylistConnection({ onPlaylistSelected, onBack, isLoading: parentLoadi
       } else {
         console.error('❌ Failed to get Spotify auth URL:', response.error);
         setError('Failed to connect to Spotify. Please try again.');
+        setLoading(false);
       }
     } catch (error) {
       console.error('❌ Error connecting to Spotify:', error);
       setError('Failed to connect to Spotify. Please try again.');
-    } finally {
       setLoading(false);
     }
   };

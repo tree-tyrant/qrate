@@ -1,3 +1,5 @@
+import type { UserAccount } from './types';
+
 // Helper function to get live pool party time (always 1 hour ago for demo)
 export function getLivePoolPartyDateTime() {
   const now = new Date();
@@ -140,29 +142,39 @@ export function getInitialEvents(username: string) {
   return events;
 }
 
-export const DEFAULT_USER_ACCOUNTS = [
+export const DEFAULT_USER_ACCOUNTS: UserAccount[] = [
   { 
+    id: 'demo',
+    role: 'host',
+    email: 'demo@example.com',
     username: 'demo', 
-    password: 'demo', 
-    email: 'demo@example.com', 
+    displayName: 'Demo Host',
+    legacyPassword: 'demo',
     events: getInitialEvents('demo'),
     trashedEvents: [] 
   },
   { 
+    id: 'tester',
+    role: 'host',
+    email: 'tester@example.com',
     username: 'tester', 
-    password: 'tester', 
-    email: 'tester@example.com', 
+    displayName: 'Tester Host',
+    legacyPassword: 'tester',
     events: getInitialEvents('tester'),
     trashedEvents: [] 
   }
-] as const;
+];
 
 export const STORAGE_KEYS = {
   USER_ACCOUNTS: 'qrate_user_accounts',
   SPOTIFY_ACCESS_TOKEN: 'spotify_access_token',
   SPOTIFY_REFRESH_TOKEN: 'spotify_refresh_token',
-  SPOTIFY_EXPIRES_AT: 'spotify_expires_at'
+  SPOTIFY_EXPIRES_AT: 'spotify_expires_at',
+  SPOTIFY_OAUTH_VERSION: 'spotify_oauth_version'
 } as const;
+
+// Current OAuth scope version - increment this to force re-authentication
+export const SPOTIFY_OAUTH_VERSION = '2.0.0';
 
 export const TIMEOUTS = {
   EVENT_LOAD: 8000,

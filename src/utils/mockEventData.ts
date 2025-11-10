@@ -1,45 +1,93 @@
-import image_084c5bbf68118a9f580036193a3398d12beb4b49 from 'figma:asset/084c5bbf68118a9f580036193a3398d12beb4b49.png';
-import image_e85c69fcb4fd004e277565cea8b31e7465479ca6 from 'figma:asset/e85c69fcb4fd004e277565cea8b31e7465479ca6.png';
-import image_e3cc7cd6962096cc1d22faa288d5a58a28f09cf6 from 'figma:asset/e3cc7cd6962096cc1d22faa288d5a58a28f09cf6.png';
 // Mock data for event metrics and analytics
+// Only used for 'tester' account - 'demo' account shows empty/real data
 
-export const MOCK_PHOTO_ALBUM = [
-  'https://images.unsplash.com/photo-1623794104182-1908b2b1431c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYXJ0eSUyMGNlbGVicmF0aW9uJTIwcGVvcGxlfGVufDF8fHx8MTc2MDUzMzg5MHww&ixlib=rb-4.1.0&q=80&w=1080',
-  image_e3cc7cd6962096cc1d22faa288d5a58a28f09cf6,
-  'https://images.unsplash.com/photo-1581974896920-8eb94f3fb650?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxuaWdodGNsdWIlMjBkaiUyMGRhbmNpbmd8ZW58MXx8fHwxNzYwNTM3OTE3fDA&ixlib=rb-4.1.0&q=80&w=1080',
-  image_084c5bbf68118a9f580036193a3398d12beb4b49,
-  image_e85c69fcb4fd004e277565cea8b31e7465479ca6
-];
-
-export const MOCK_GUEST_FEEDBACK = [
-  {
-    name: 'Sarah L.',
-    feedback: 'Amazing event with great music. I danced all night!',
-    rating: 5
-  },
-  {
-    name: 'Mike D.',
-    feedback: 'Perfect vibe, the DJ nailed the transitions between eras.',
-    rating: 5
-  },
-  {
-    name: 'Jessica R.',
-    feedback: 'Best party I\'ve been to this year. Loved every minute!',
-    rating: 5
-  },
-  {
-    name: 'Tom H.',
-    feedback: 'Great energy, awesome crowd, and incredible music selection.',
-    rating: 4
-  },
-  {
-    name: 'Emma K.',
-    feedback: 'The throwback tracks were on point! Will definitely come again.',
-    rating: 5
+// Helper to check if current user is tester
+export function isTesterAccount(username?: string): boolean {
+  if (username) {
+    return username === 'tester';
   }
-];
+  
+  if (typeof window === 'undefined') return false;
+  try {
+    // Check if there's a stored current user
+    const storedUser = sessionStorage.getItem('qrate_current_user') || 
+                      localStorage.getItem('qrate_current_user');
+    return storedUser === 'tester';
+  } catch {
+    return false;
+  }
+}
 
-export const MOCK_PARTY_ANTHEMS = [
+// Helper to check if current user is demo account
+export function isDemoAccount(username?: string): boolean {
+  if (username) {
+    return username === 'demo';
+  }
+  
+  if (typeof window === 'undefined') return false;
+  try {
+    // Check if there's a stored current user
+    const storedUser = sessionStorage.getItem('qrate_current_user') || 
+                      localStorage.getItem('qrate_current_user');
+    return storedUser === 'demo';
+  } catch {
+    return false;
+  }
+}
+
+// Replace assets with Unsplash stock photos
+const STOCK_PHOTO_1 = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYXJ0eSUyMGNlbGVicmF0aW9uJTIwcGVvcGxlfGVufDF8fHx8MTc2MDUzMzg5MHww&ixlib=rb-4.1.0&q=80&w=1080';
+const STOCK_PHOTO_2 = 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxuaWdodGNsdWIlMjBwYXJ0eSUyMGxpZ2h0c3xlbnwxfHx8fDE3NjA0NjMyNjF8MA&ixlib=rb-4.1.0&q=80&w=1080';
+const STOCK_PHOTO_3 = 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjbHViJTIwZGFuY2luZ3xlbnwxfHx8fDE3NjA1Mzc5MTd8MA&ixlib=rb-4.1.0&q=80&w=1080';
+
+// Get mock data based on username - only return data for tester account
+export function getMockPhotoAlbum(username?: string): string[] {
+  return isTesterAccount(username) ? [
+    'https://images.unsplash.com/photo-1623794104182-1908b2b1431c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYXJ0eSUyMGNlbGVicmF0aW9uJTIwcGVvcGxlfGVufDF8fHx8MTc2MDUzMzg5MHww&ixlib=rb-4.1.0&q=80&w=1080',
+    STOCK_PHOTO_2,
+    'https://images.unsplash.com/photo-1581974896920-8eb94f3fb650?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxuaWdodGNsdWIlMjBkaiUyMGRhbmNpbmd8ZW58MXx8fHwxNzYwNTM3OTE3fDA&ixlib=rb-4.1.0&q=80&w=1080',
+    STOCK_PHOTO_1,
+    STOCK_PHOTO_3
+  ] : [];
+}
+
+// Legacy export for backward compatibility - will be empty for non-tester accounts
+export const MOCK_PHOTO_ALBUM = getMockPhotoAlbum();
+
+export function getMockGuestFeedback(username?: string) {
+  return isTesterAccount(username) ? [
+  {
+    name: 'Sarah Mitchell',
+    rating: 5,
+    feedback: 'Absolutely **amazing night!** The DJ knew exactly what the **crowd wanted**.',
+    photo: 'https://images.unsplash.com/photo-1690444963408-9573a17a8058?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx3b21hbiUyMHBvcnRyYWl0JTIwc21pbGluZ3xlbnwxfHx8fDE3NjEwNTgwMTB8MA&ixlib=rb-4.1.0&q=80&w=1080'
+  },
+  {
+    name: 'Mike Chen',
+    rating: 5,
+    feedback: '**Best party** I\'ve been to this year. The **vibe** was **perfect** from start to finish!',
+    photo: 'https://images.unsplash.com/photo-1614917752523-3e61c00e5e68?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtYW4lMjBwb3J0cmFpdCUyMHNtaWxpbmd8ZW58MXx8fHwxNzYxMDY4MTMwfDA&ixlib=rb-4.1.0&q=80&w=1080'
+  },
+  {
+    name: 'Alex Rodriguez',
+    rating: 4,
+    feedback: '**Great music choices** throughout the night. Would love more **variety** in the first hour next time.',
+    photo: 'https://images.unsplash.com/photo-1656582117510-3a177bf866c3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBwb3J0cmFpdCUyMGhhcHB5fGVufDF8fHx8MTc2MTA4OTU2NXww&ixlib=rb-4.1.0&q=80&w=1080'
+  },
+  {
+    name: 'Jessica Park',
+    rating: 4,
+    feedback: 'The **energy** was incredible and the DJ **read the crowd perfectly**. **Fantastic experience** overall!',
+    photo: 'https://images.unsplash.com/photo-1675705444858-97005ce93298?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMHdvbWFuJTIwZmFjZXxlbnwxfHx8fDE3NjEwNjQzOTh8MA&ixlib=rb-4.1.0&q=80&w=1080'
+  }
+  ] : [];
+}
+
+// Legacy export for backward compatibility
+export const MOCK_GUEST_FEEDBACK = getMockGuestFeedback();
+
+export function getMockPartyAnthems(username?: string) {
+  return isTesterAccount(username) ? [
   {
     name: 'Billie Jean',
     artist: 'Michael Jackson',
@@ -70,9 +118,18 @@ export const MOCK_PARTY_ANTHEMS = [
     aps: 85,
     duration: 249000
   }
-];
+  ] : [];
+}
 
-export function generateVibeTimeline(eventDuration: number = 240) {
+// Legacy export for backward compatibility
+export const MOCK_PARTY_ANTHEMS = getMockPartyAnthems();
+
+export function generateVibeTimeline(eventDuration: number = 240, username?: string) {
+  // Only generate mock data for tester account
+  if (!isTesterAccount(username)) {
+    return [];
+  }
+  
   // Generate a realistic vibe timeline over the event duration (in minutes)
   const dataPoints: Array<{ time: string; vibeScore: number; energyLevel: number }> = [];
   const intervals = Math.min(eventDuration / 15, 16); // Max 16 data points
@@ -114,11 +171,12 @@ export function generateVibeTimeline(eventDuration: number = 240) {
 
 export function calculateLiveVibeScore(
   preferences: any[] = [],
-  currentTrack?: any
+  currentTrack?: any,
+  username?: string
 ): number {
   // Calculate how well the current track aligns with crowd preferences
-  // Return 0 if no data (clean slate for new events)
-  if (!currentTrack || preferences.length === 0) {
+  // Return 0 if no data (clean slate for new events) or not tester account
+  if (!isTesterAccount(username) || !currentTrack || preferences.length === 0) {
     return 0;
   }
   
@@ -146,7 +204,12 @@ export function getTopGenres(preferences: any[], limit: number = 3): string[] {
     .map(([genre]) => genre);
 }
 
-export function getEnergyLevel(currentTime?: Date): 'Chill' | 'Grooving' | 'Peaking' {
+export function getEnergyLevel(currentTime?: Date, username?: string): 'Chill' | 'Grooving' | 'Peaking' {
+  // Only simulate for tester account, otherwise return default
+  if (!isTesterAccount(username)) {
+    return 'Chill';
+  }
+  
   // Simulate energy based on time or random for demo
   if (!currentTime) {
     const rand = Math.random();
@@ -178,10 +241,21 @@ export const UPCOMING_EVENT_MOCK_DATA = {
   musicSynced: 0
 };
 
-export const LIVE_EVENT_MOCK_DATA = {
-  liveGuestCount: 128,
-  liveVibeScore: 88,
-  topGenres: ['Tropical House', 'Deep House', 'Electronic'],
-  energyLevel: 'Grooving' as const,
-  energyPercent: 72
-};
+export function getLiveEventMockData(username?: string) {
+  return isTesterAccount(username) ? {
+    liveGuestCount: 128,
+    liveVibeScore: 88,
+    topGenres: ['Tropical House', 'Deep House', 'Electronic'],
+    energyLevel: 'Grooving' as const,
+    energyPercent: 72
+  } : {
+    liveGuestCount: 0,
+    liveVibeScore: 0,
+    topGenres: [],
+    energyLevel: 'Chill' as const,
+    energyPercent: 0
+  };
+}
+
+// Legacy export for backward compatibility
+export const LIVE_EVENT_MOCK_DATA = getLiveEventMockData();

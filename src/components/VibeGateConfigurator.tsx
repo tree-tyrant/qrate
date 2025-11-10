@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { utils } from '@/utils/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
@@ -10,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { VibeProfile, VibeStrictness } from '../utils/types';
 import { createVibeProfileFromTheme, getVibeProfileDescription } from '../utils/vibeGate';
 import { VibeGateDemo } from './VibeGateDemo';
-import { Filter, Plus, X, Zap, Music, Calendar, Gauge, Activity, Sparkles } from 'lucide-react';
+import { Filter, Plus, X, Zap, Music, Calendar, Gauge, Activity, Sparkles, Ban, UserX } from 'lucide-react';
 
 interface VibeGateConfiguratorProps {
   theme: string;
@@ -27,7 +28,75 @@ const COMMON_GENRES = [
   'Latin', 'Dance', 'Funk', 'Soul', 'Reggae', 'Blues', 'Folk'
 ];
 
-export function VibeGateConfigurator({ 
+const sanitizeStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(item => {
+      if (typeof item === 'string') {
+        return item.trim();
+      }
+      if (item == null) {
+        return '';
+      }
+      return String(item).trim();
+    })
+    .filter(Boolean);
+};
+
+const arraysEqual = (a: string[] = [], b: string[] = []) => {
+  if (a.length !== b.length) return false;
+  return a.every((value, index) => value === b[index]);
+};
+
+const rangeEqual = (
+  a?: { min?: number; max?: number },
+  b?: { min?: number; max?: number }
+) => {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.min === b.min && a.max === b.max;
+};
+
+const areProfilesEqual = (a: VibeProfile, b: VibeProfile) => {
+  return (
+    a.strictness === b.strictness &&
+    a.allowExplicit === b.allowExplicit &&
+    arraysEqual(a.allowedGenres, b.allowedGenres) &&
+    arraysEqual(a.blockedGenres, b.blockedGenres) &&
+    arraysEqual(a.blockedArtists, b.blockedArtists) &&
+    arraysEqual(a.keywords, b.keywords) &&
+    arraysEqual(a.excludeKeywords, b.excludeKeywords) &&
+    rangeEqual(a.yearRange, b.yearRange) &&
+    rangeEqual(a.tempoRange, b.tempoRange) &&
+    rangeEqual(a.energy, b.energy) &&
+    rangeEqual(a.danceability, b.danceability)
+  );
+};
+
+function buildVibeProfile(
+  theme: string,
+  eventName: string,
+  incoming?: Partial<VibeProfile> | null
+): VibeProfile {
+  const base = createVibeProfileFromTheme(theme, eventName);
+  const merged = incoming ? { ...base, ...incoming } : base;
+
+  return {
+    ...merged,
+    strictness: (merged.strictness as VibeStrictness) ?? 'loose',
+    allowedGenres: sanitizeStringArray(merged.allowedGenres),
+    blockedGenres: sanitizeStringArray(merged.blockedGenres),
+    blockedArtists: sanitizeStringArray(merged.blockedArtists),
+    keywords: sanitizeStringArray(merged.keywords),
+    excludeKeywords: sanitizeStringArray(merged.excludeKeywords),
+    allowExplicit: typeof merged.allowExplicit === 'boolean' ? merged.allowExplicit : true
+  };
+}
+
+export const VibeGateConfigurator = memo(function VibeGateConfigurator({ 
   theme, 
   eventName, 
   vibeProfile, 
@@ -36,75 +105,130 @@ export function VibeGateConfigurator({
   selectedVibes = [],
   onVibeChange
 }: VibeGateConfiguratorProps) {
-  const [profile, setProfile] = useState<VibeProfile>(
-    vibeProfile || createVibeProfileFromTheme(theme, eventName)
+  const [profile, setProfile] = useState<VibeProfile>(() => 
+    buildVibeProfile(theme, eventName, vibeProfile)
   );
   const [genreInput, setGenreInput] = useState('');
+  const [blockedGenreInput, setBlockedGenreInput] = useState('');
+  const [blockedArtistInput, setBlockedArtistInput] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
   const [excludeKeywordInput, setExcludeKeywordInput] = useState('');
 
-  // Auto-generate profile when theme changes
+  // Persistence key per event (best available identifier during creation)
+  const persistenceKey = useMemo(() => `qrate_vibe_gate_${eventName || 'new'}`, [eventName]);
+
+  // Load saved configuration (profile + selectedVibes)
   useEffect(() => {
+    const saved = utils.storage.get(persistenceKey) as { profile?: VibeProfile; selectedVibes?: string[] } | null;
+    if (!saved) return;
+    if (saved.profile) {
+      const hydratedProfile = buildVibeProfile(theme, eventName, saved.profile);
+      setProfile(hydratedProfile);
+      // also notify parent to stay in sync
+      onChange(hydratedProfile);
+    }
+    if (saved.selectedVibes && Array.isArray(saved.selectedVibes) && onVibeChange) {
+      onVibeChange(saved.selectedVibes);
+    }
+  }, [persistenceKey, onChange, onVibeChange, theme, eventName]);
+
+  // Auto-generate profile when theme changes - Memoized to prevent unnecessary recalculations
+  const autoProfile = useMemo(() => {
     if (!vibeProfile && (theme || eventName)) {
-      const autoProfile = createVibeProfileFromTheme(theme, eventName);
+      return buildVibeProfile(theme, eventName);
+    }
+    return null;
+  }, [vibeProfile, theme, eventName]);
+
+  useEffect(() => {
+    if (autoProfile) {
       setProfile(autoProfile);
       onChange(autoProfile);
     }
-  }, [theme, eventName]);
+  }, [autoProfile, onChange]);
 
-  // Notify parent of changes
+  // Notify parent of changes - Only when profile actually changes
   useEffect(() => {
-    onChange(profile);
-  }, [profile]);
+    if (profile !== vibeProfile) {
+      onChange(profile);
+    }
+  }, [profile, vibeProfile, onChange]);
 
-  const updateProfile = (updates: Partial<VibeProfile>) => {
+  // Persist changes (profile + selectedVibes)
+  useEffect(() => {
+    utils.storage.set(persistenceKey, { profile, selectedVibes });
+  }, [persistenceKey, profile, selectedVibes]);
+
+  const updateProfile = useCallback((updates: Partial<VibeProfile>) => {
     setProfile(prev => ({ ...prev, ...updates }));
-  };
+  }, []);
 
-  const addGenre = (genre: string) => {
+  useEffect(() => {
+    const hydratedProfile = buildVibeProfile(theme, eventName, vibeProfile);
+    setProfile(prev => (areProfilesEqual(prev, hydratedProfile) ? prev : hydratedProfile));
+  }, [theme, eventName, vibeProfile]);
+
+  const addGenre = useCallback((genre: string) => {
     if (genre && !profile.allowedGenres.includes(genre)) {
       updateProfile({ allowedGenres: [...profile.allowedGenres, genre] });
       setGenreInput('');
     }
-  };
+  }, [profile.allowedGenres, updateProfile]);
 
-  const removeGenre = (genre: string) => {
+  const removeGenre = useCallback((genre: string) => {
     updateProfile({ allowedGenres: profile.allowedGenres.filter(g => g !== genre) });
-  };
+  }, [profile.allowedGenres, updateProfile]);
 
-  const addBlockedGenre = (genre: string) => {
-    if (genre && !profile.blockedGenres.includes(genre)) {
-      updateProfile({ blockedGenres: [...profile.blockedGenres, genre] });
+  const addBlockedGenre = useCallback((genre: string) => {
+    const normalized = genre.trim();
+    if (normalized && !profile.blockedGenres.includes(normalized)) {
+      updateProfile({ blockedGenres: [...profile.blockedGenres, normalized] });
     }
-  };
+    setBlockedGenreInput('');
+  }, [profile.blockedGenres, updateProfile]);
 
-  const removeBlockedGenre = (genre: string) => {
+  const removeBlockedGenre = useCallback((genre: string) => {
     updateProfile({ blockedGenres: profile.blockedGenres.filter(g => g !== genre) });
-  };
+  }, [profile.blockedGenres, updateProfile]);
 
-  const addKeyword = (keyword: string) => {
+  const addBlockedArtist = useCallback((artist: string) => {
+    const normalized = artist.trim();
+    if (
+      normalized &&
+      !profile.blockedArtists.some(existing => existing.toLowerCase() === normalized.toLowerCase())
+    ) {
+      updateProfile({ blockedArtists: [...profile.blockedArtists, normalized] });
+    }
+    setBlockedArtistInput('');
+  }, [profile.blockedArtists, updateProfile]);
+
+  const removeBlockedArtist = useCallback((artist: string) => {
+    updateProfile({ blockedArtists: profile.blockedArtists.filter(a => a !== artist) });
+  }, [profile.blockedArtists, updateProfile]);
+
+  const addKeyword = useCallback((keyword: string) => {
     if (keyword && !profile.keywords.includes(keyword)) {
       updateProfile({ keywords: [...profile.keywords, keyword] });
       setKeywordInput('');
     }
-  };
+  }, [profile.keywords, updateProfile]);
 
-  const removeKeyword = (keyword: string) => {
+  const removeKeyword = useCallback((keyword: string) => {
     updateProfile({ keywords: profile.keywords.filter(k => k !== keyword) });
-  };
+  }, [profile.keywords, updateProfile]);
 
-  const addExcludeKeyword = (keyword: string) => {
+  const addExcludeKeyword = useCallback((keyword: string) => {
     if (keyword && !profile.excludeKeywords.includes(keyword)) {
       updateProfile({ excludeKeywords: [...profile.excludeKeywords, keyword] });
       setExcludeKeywordInput('');
     }
-  };
+  }, [profile.excludeKeywords, updateProfile]);
 
-  const removeExcludeKeyword = (keyword: string) => {
+  const removeExcludeKeyword = useCallback((keyword: string) => {
     updateProfile({ excludeKeywords: profile.excludeKeywords.filter(k => k !== keyword) });
-  };
+  }, [profile.excludeKeywords, updateProfile]);
 
-  const vibeThemes = [
+  const vibeThemes = useMemo(() => [
     { value: 'chill', label: 'Chill', color: 'from-green-500 to-teal-500' },
     { value: 'rave', label: 'Rave', color: 'from-purple-500 to-pink-600' },
     { value: 'energetic', label: 'Energetic', color: 'from-orange-500 to-red-500' },
@@ -117,22 +241,22 @@ export function VibeGateConfigurator({
     { value: 'wild', label: 'Wild', color: 'from-red-500 to-pink-600' },
     { value: 'classy', label: 'Classy', color: 'from-amber-600 to-yellow-600' },
     { value: 'retro', label: 'Retro', color: 'from-pink-500 to-purple-600' }
-  ];
+  ], []);
 
-  const toggleVibe = (vibe: string) => {
+  const toggleVibe = useCallback((vibe: string) => {
     if (!onVibeChange) return;
     if (selectedVibes.includes(vibe)) {
       onVibeChange(selectedVibes.filter(v => v !== vibe));
     } else {
       onVibeChange([...selectedVibes, vibe]);
     }
-  };
+  }, [selectedVibes, onVibeChange]);
 
   return (
     <Card className={`glass-effect border-border ${className}`}>
       <CardHeader>
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
+          <div className="bg-primary/10 p-2 rounded-lg">
             <Filter className="w-5 h-5 text-primary" />
           </div>
           <div>
@@ -191,19 +315,19 @@ export function VibeGateConfigurator({
               <SelectItem value="strict">
                 <div className="flex flex-col items-start">
                   <span className="font-medium">Strict</span>
-                  <span className="text-xs text-muted-foreground">90%+ match required - Pure thematic focus</span>
+                  <span className="text-muted-foreground text-xs">90%+ match required - Pure thematic focus</span>
                 </div>
               </SelectItem>
               <SelectItem value="loose">
                 <div className="flex flex-col items-start">
                   <span className="font-medium">Loose</span>
-                  <span className="text-xs text-muted-foreground">60%+ match required - Balanced filtering</span>
+                  <span className="text-muted-foreground text-xs">60%+ match required - Balanced filtering</span>
                 </div>
               </SelectItem>
               <SelectItem value="open">
                 <div className="flex flex-col items-start">
                   <span className="font-medium">Open</span>
-                  <span className="text-xs text-muted-foreground">30%+ match required - Flexible vibe</span>
+                  <span className="text-muted-foreground text-xs">30%+ match required - Flexible vibe</span>
                 </div>
               </SelectItem>
             </SelectContent>
@@ -244,7 +368,7 @@ export function VibeGateConfigurator({
               <Badge
                 key={genre}
                 variant="outline"
-                className="cursor-pointer hover:bg-primary/20"
+                className="hover:bg-primary/20 cursor-pointer"
                 onClick={() => addGenre(genre)}
               >
                 + {genre}
@@ -259,8 +383,106 @@ export function VibeGateConfigurator({
                 <Badge key={genre} variant="default" className="gap-1">
                   {genre}
                   <X 
-                    className="w-3 h-3 cursor-pointer hover:text-destructive" 
+                    className="w-3 h-3 hover:text-destructive cursor-pointer" 
                     onClick={() => removeGenre(genre)}
+                  />
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Blocked Genres */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Ban className="w-4 h-4 text-destructive" />
+            <Label>Blocked Genres</Label>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Block genre..."
+              value={blockedGenreInput}
+              onChange={(e) => setBlockedGenreInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addBlockedGenre(blockedGenreInput);
+                }
+              }}
+              className="bg-input border-border"
+            />
+            <Button 
+              onClick={() => addBlockedGenre(blockedGenreInput)}
+              size="icon"
+              variant="secondary"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {COMMON_GENRES.filter(g => !profile.blockedGenres.includes(g)).map(genre => (
+              <Badge
+                key={genre}
+                variant="outline"
+                className="hover:bg-destructive/20 cursor-pointer"
+                onClick={() => addBlockedGenre(genre)}
+              >
+                + {genre}
+              </Badge>
+            ))}
+          </div>
+
+          {profile.blockedGenres.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {profile.blockedGenres.map(genre => (
+                <Badge key={genre} variant="destructive" className="gap-1">
+                  {genre}
+                  <X 
+                    className="w-3 h-3 hover:text-background cursor-pointer" 
+                    onClick={() => removeBlockedGenre(genre)}
+                  />
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Blocked Artists */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <UserX className="w-4 h-4 text-destructive" />
+            <Label>Blocked Artists</Label>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              placeholder="e.g., Explicit Content Artist..."
+              value={blockedArtistInput}
+              onChange={(e) => setBlockedArtistInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addBlockedArtist(blockedArtistInput);
+                }
+              }}
+              className="bg-input border-border"
+            />
+            <Button 
+              onClick={() => addBlockedArtist(blockedArtistInput)}
+              size="icon"
+              variant="secondary"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
+          {profile.blockedArtists.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {profile.blockedArtists.map(artist => (
+                <Badge key={artist} variant="destructive" className="gap-1">
+                  {artist}
+                  <X 
+                    className="w-3 h-3 cursor-pointer" 
+                    onClick={() => removeBlockedArtist(artist)}
                   />
                 </Badge>
               ))}
@@ -302,9 +524,9 @@ export function VibeGateConfigurator({
           </div>
           
           {/* Custom year range */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="gap-3 grid grid-cols-2">
             <div>
-              <Label className="text-xs text-muted-foreground">From Year</Label>
+              <Label className="text-muted-foreground text-xs">From Year</Label>
               <Input
                 type="number"
                 placeholder="1990"
@@ -319,7 +541,7 @@ export function VibeGateConfigurator({
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">To Year</Label>
+              <Label className="text-muted-foreground text-xs">To Year</Label>
               <Input
                 type="number"
                 placeholder="1999"
@@ -338,12 +560,12 @@ export function VibeGateConfigurator({
 
         {/* Energy Range */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-primary" />
               <Label>Energy Range</Label>
             </div>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-muted-foreground text-xs">
               {((profile.energy?.min || 0) * 100).toFixed(0)}% - {((profile.energy?.max || 1) * 100).toFixed(0)}%
             </span>
           </div>
@@ -355,7 +577,7 @@ export function VibeGateConfigurator({
               (profile.energy?.min || 0) * 100,
               (profile.energy?.max || 1) * 100
             ]}
-            onValueChange={([min, max]) => updateProfile({
+            onValueChange={([min, max]: [number, number]) => updateProfile({
               energy: { min: min / 100, max: max / 100 }
             })}
             className="w-full"
@@ -364,12 +586,12 @@ export function VibeGateConfigurator({
 
         {/* Danceability Range */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Gauge className="w-4 h-4 text-accent" />
               <Label>Danceability Range</Label>
             </div>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-muted-foreground text-xs">
               {((profile.danceability?.min || 0) * 100).toFixed(0)}% - {((profile.danceability?.max || 1) * 100).toFixed(0)}%
             </span>
           </div>
@@ -381,7 +603,7 @@ export function VibeGateConfigurator({
               (profile.danceability?.min || 0) * 100,
               (profile.danceability?.max || 1) * 100
             ]}
-            onValueChange={([min, max]) => updateProfile({
+            onValueChange={([min, max]: [number, number]) => updateProfile({
               danceability: { min: min / 100, max: max / 100 }
             })}
             className="w-full"
@@ -418,7 +640,7 @@ export function VibeGateConfigurator({
                 <Badge key={keyword} variant="secondary" className="gap-1">
                   {keyword}
                   <X 
-                    className="w-3 h-3 cursor-pointer hover:text-destructive" 
+                    className="w-3 h-3 hover:text-destructive cursor-pointer" 
                     onClick={() => removeKeyword(keyword)}
                   />
                 </Badge>
@@ -467,16 +689,16 @@ export function VibeGateConfigurator({
         </div>
 
         {/* Explicit Content */}
-        <div className="flex items-center justify-between">
+        <div className="flex justify-between items-center">
           <div className="space-y-0.5">
             <Label>Allow Explicit Content</Label>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               Allow songs with explicit lyrics
             </p>
           </div>
           <Switch
             checked={profile.allowExplicit}
-            onCheckedChange={(checked) => updateProfile({ allowExplicit: checked })}
+            onCheckedChange={(checked: boolean) => updateProfile({ allowExplicit: checked })}
           />
         </div>
 
@@ -485,4 +707,4 @@ export function VibeGateConfigurator({
       </CardContent>
     </Card>
   );
-}
+});

@@ -20,6 +20,7 @@ interface DiscoveryTabContentProps {
   onSearchTrackSelected: (track: any) => void;
   onSetShowAllAnthems: (showAll: boolean) => void;
   onAddToQueue: (song: Track) => void;
+  onRefreshAnthems?: () => void;
 }
 
 /**
@@ -34,7 +35,8 @@ export function DiscoveryTabContent({
   addedSongs,
   onSearchTrackSelected,
   onSetShowAllAnthems,
-  onAddToQueue
+  onAddToQueue,
+  onRefreshAnthems
 }: DiscoveryTabContentProps) {
   
   return (
@@ -81,7 +83,7 @@ export function DiscoveryTabContent({
           <CardContent className="p-12 text-center">
             <Lightbulb className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
-              Discovery suggestions will appear here once more guest data is available
+              Add songs to your queue to discover similar hidden anthems
             </p>
           </CardContent>
         </Card>
@@ -101,10 +103,15 @@ export function DiscoveryTabContent({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => {/* Refresh anthems */}}
-                  className="h-8 w-8 p-0 text-gray-400 hover:text-[var(--neon-pink)]"
+                  onClick={() => {
+                    if (onRefreshAnthems) {
+                      onRefreshAnthems();
+                    }
+                  }}
+                  disabled={loadingDiscovery}
+                  className="h-8 w-8 p-0 text-gray-400 hover:text-[var(--neon-pink)] disabled:opacity-50"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className={`w-4 h-4 ${loadingDiscovery ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
               <p className="text-sm text-gray-400 mb-4">

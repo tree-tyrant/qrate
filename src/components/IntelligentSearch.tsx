@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { Search, Music, X, Loader2, AlertCircle } from 'lucide-react';
 import { searchTracks, TrackSearchResult } from '../utils/djWorkflow';
+import { log } from '../utils/logger';
 
 interface IntelligentSearchProps {
   onTrackSelected: (track: TrackSearchResult) => void;
@@ -13,7 +14,7 @@ interface IntelligentSearchProps {
   className?: string;
 }
 
-export function IntelligentSearch({ 
+export const IntelligentSearch = memo(function IntelligentSearch({ 
   onTrackSelected, 
   onClose,
   placeholder = "Search for track...",
@@ -61,7 +62,7 @@ export function IntelligentSearch({
           setError('No tracks found. Try a different search.');
         }
       } catch (err) {
-        console.error('Search error:', err);
+        log.error('Search error', err, 'IntelligentSearch');
         setError('Search failed. Please try again.');
         setResults([]);
       } finally {
@@ -98,7 +99,7 @@ export function IntelligentSearch({
   };
   
   const handleSelectTrack = (track: TrackSearchResult) => {
-    console.log('🎵 Track selected:', track.name);
+    log.debug('Track selected', { trackName: track.name, trackId: track.trackId }, 'IntelligentSearch');
     onTrackSelected(track);
     setQuery('');
     setResults([]);
@@ -115,7 +116,7 @@ export function IntelligentSearch({
     <div className={`relative ${className}`}>
       {/* Search input */}
       <div className="relative">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+        <div className="top-1/2 left-3 absolute -translate-y-1/2 pointer-events-none">
           {isSearching ? (
             <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
           ) : (
@@ -130,16 +131,20 @@ export function IntelligentSearch({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="pl-10 pr-20 h-12 text-base bg-input/50 border-2 border-border hover:border-accent focus:border-accent transition-colors"
+          className="bg-input/50 pr-20 pl-10 border-2 border-border hover:border-accent focus:border-accent h-12 text-base transition-colors"
+          aria-label="Search for tracks"
+          aria-expanded={results.length > 0}
+          aria-haspopup="listbox"
+          role="combobox"
         />
         
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+        <div className="top-1/2 right-2 absolute flex items-center gap-1 -translate-y-1/2">
           {query && (
             <Button
               size="sm"
               variant="ghost"
               onClick={handleClear}
-              className="h-8 w-8 p-0 hover:bg-muted"
+              className="hover:bg-muted p-0 w-8 h-8"
             >
               <X className="w-4 h-4" />
             </Button>
@@ -150,7 +155,7 @@ export function IntelligentSearch({
               size="sm"
               variant="ghost"
               onClick={onClose}
-              className="h-8 px-3 hover:bg-muted"
+              className="hover:bg-muted px-3 h-8"
             >
               Cancel
             </Button>
@@ -160,7 +165,10 @@ export function IntelligentSearch({
       
       {/* Search results dropdown */}
       {(results.length > 0 || error) && (
-        <div className="fixed left-0 right-0 mt-2 z-[99999] glass-effect rounded-xl border-2 border-border shadow-2xl max-h-96 overflow-y-auto"
+        <div 
+          className="right-0 left-0 z-99999 fixed shadow-2xl mt-2 border-2 border-border rounded-xl max-h-96 overflow-y-auto glass-effect"
+          role="listbox"
+          aria-label="Search results"
           style={{
             top: inputRef.current ? `${inputRef.current.getBoundingClientRect().bottom + 8}px` : '100%',
             left: inputRef.current ? `${inputRef.current.getBoundingClientRect().left}px` : '0',
@@ -168,7 +176,7 @@ export function IntelligentSearch({
           }}
         >
           {error && (
-            <div className="p-4 flex items-center gap-3 text-muted-foreground">
+            <div className="flex items-center gap-3 p-4 text-muted-foreground">
               <AlertCircle className="w-5 h-5 text-destructive" />
               <span className="text-sm">{error}</span>
             </div>
@@ -179,6 +187,8 @@ export function IntelligentSearch({
               key={track.trackId}
               onClick={() => handleSelectTrack(track)}
               onMouseEnter={() => setSelectedIndex(index)}
+              role="option"
+              aria-selected={index === selectedIndex}
               className={`
                 w-full p-3 flex items-center gap-3 text-left transition-all
                 hover:bg-accent/10 border-b border-border/50 last:border-b-0
@@ -186,7 +196,7 @@ export function IntelligentSearch({
               `}
             >
               {/* Album art */}
-              <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden bg-muted">
+              <div className="bg-muted rounded-md w-12 h-12 overflow-hidden shrink-0">
                 {track.albumArt ? (
                   <img 
                     src={track.albumArt} 
@@ -194,7 +204,7 @@ export function IntelligentSearch({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
+                  <div className="flex justify-center items-center w-full h-full">
                     <Music className="w-6 h-6 text-muted-foreground" />
                   </div>
                 )}
@@ -203,19 +213,19 @@ export function IntelligentSearch({
               {/* Track info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <p className="text-sm font-semibold text-foreground truncate">
+                  <p className="font-semibold text-foreground text-sm truncate">
                     {track.name}
                   </p>
                   {track.explicit && (
-                    <Badge variant="destructive" className="h-4 px-1 text-xs">
+                    <Badge variant="destructive" className="px-1 h-4 text-xs">
                       E
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground truncate">
+                <p className="text-muted-foreground text-xs truncate">
                   {track.artist}
                 </p>
-                <p className="text-xs text-muted-foreground/70 truncate">
+                <p className="text-muted-foreground/70 text-xs truncate">
                   {track.album}
                   {track.releaseYear && ` • ${track.releaseYear}`}
                 </p>
@@ -223,7 +233,7 @@ export function IntelligentSearch({
               
               {/* Selected indicator */}
               {index === selectedIndex && (
-                <div className="flex-shrink-0 w-2 h-2 rounded-full bg-accent animate-pulse"></div>
+                <div className="bg-accent rounded-full w-2 h-2 animate-pulse shrink-0"></div>
               )}
             </button>
           ))}
@@ -232,30 +242,30 @@ export function IntelligentSearch({
       
       {/* Keyboard hints */}
       {results.length > 0 && (
-        <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+        <div className="flex items-center gap-4 mt-2 text-muted-foreground text-xs">
           <div className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border">↑</kbd>
-            <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border">↓</kbd>
+            <kbd className="bg-muted px-1.5 py-0.5 border border-border rounded">↑</kbd>
+            <kbd className="bg-muted px-1.5 py-0.5 border border-border rounded">↓</kbd>
             <span>Navigate</span>
           </div>
           <div className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border">Enter</kbd>
+            <kbd className="bg-muted px-1.5 py-0.5 border border-border rounded">Enter</kbd>
             <span>Select</span>
           </div>
           <div className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border">Esc</kbd>
+            <kbd className="bg-muted px-1.5 py-0.5 border border-border rounded">Esc</kbd>
             <span>Cancel</span>
           </div>
         </div>
       )}
     </div>
   );
-}
+});
 
 /**
  * Compact version for "Playing Off-Book?" button
  */
-export function OffBookSearch({ onTrackSelected }: { onTrackSelected: (track: TrackSearchResult) => void }) {
+export const OffBookSearch = memo(function OffBookSearch({ onTrackSelected }: { onTrackSelected: (track: TrackSearchResult) => void }) {
   const [isOpen, setIsOpen] = useState(false);
   
   if (!isOpen) {
@@ -263,17 +273,17 @@ export function OffBookSearch({ onTrackSelected }: { onTrackSelected: (track: Tr
       <Button
         onClick={() => setIsOpen(true)}
         variant="outline"
-        className="border-2 border-dashed border-muted-foreground/30 hover:border-accent hover:bg-accent/10 transition-all"
+        className="hover:bg-accent/10 border-2 border-muted-foreground/30 hover:border-accent border-dashed transition-all"
       >
-        <Search className="w-4 h-4 mr-2" />
+        <Search className="mr-2 w-4 h-4" />
         Playing Off-Book?
       </Button>
     );
   }
   
   return (
-    <div className="p-4 glass-effect rounded-xl border-2 border-accent/30 animate-slide-in">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="p-4 border-2 border-accent/30 rounded-xl animate-slide-in glass-effect">
+      <div className="flex justify-between items-center mb-3">
         <div className="flex items-center gap-2">
           <Music className="w-5 h-5 text-accent" />
           <h4 className="font-semibold text-foreground">Search Current Track</h4>
@@ -290,9 +300,9 @@ export function OffBookSearch({ onTrackSelected }: { onTrackSelected: (track: Tr
         autoFocus={true}
       />
       
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-muted-foreground text-xs">
         Find and log tracks not in the QRate recommendations
       </p>
     </div>
   );
-}
+});

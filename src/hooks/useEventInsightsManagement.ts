@@ -2,10 +2,51 @@
 // Extracted to separate business logic from UI
 
 import { useEffect } from 'react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { eventApi, utils } from '../utils/api';
-import { generateCamelotKey } from '../utils/djDashboardHelpers';
+import { camelotKeyFromAudio, generateCamelotKey } from '../utils/djDashboardHelpers';
 import type { Track } from './useDJDashboardState';
+
+const MIN_PREVIEW_START_MS = 15000;
+const DEFAULT_PREVIEW_START_MS = 30000;
+const DEFAULT_PREVIEW_DURATION_MS = 20000;
+
+function getPreviewUrlFromRecommendation(rec: any): string | undefined {
+  return (
+    rec.song?.preview_url ||
+    rec.song?.previewUrl ||
+    rec.preview_url ||
+    rec.previewUrl ||
+    rec.song?.external_preview_url ||
+    rec.external_preview_url
+  );
+}
+
+function getPreviewDurationMs(rec: any): number | undefined {
+  return rec.song?.preview_duration_ms || rec.preview_duration_ms || rec.song?.previewDurationMs || rec.previewDurationMs;
+}
+
+function estimatePreviewStartMs(rec: any): number | undefined {
+  const explicitOffset = rec.song?.chorus_offset_ms || rec.song?.chorusOffsetMs || rec.chorus_offset_ms || rec.chorusOffsetMs;
+  if (typeof explicitOffset === 'number' && explicitOffset >= 0) {
+    return explicitOffset;
+  }
+
+  const durationMs =
+    rec.song?.duration_ms ||
+    rec.song?.durationMs ||
+    rec.duration_ms ||
+    rec.durationMs ||
+    (typeof rec.song?.duration === 'number' ? rec.song.duration : undefined);
+
+  if (typeof durationMs === 'number' && durationMs > 0) {
+    const heuristicStart = Math.round(durationMs * 0.4);
+    const maxStart = Math.max(0, durationMs - DEFAULT_PREVIEW_DURATION_MS);
+    return Math.max(MIN_PREVIEW_START_MS, Math.min(heuristicStart, maxStart));
+  }
+
+  return DEFAULT_PREVIEW_START_MS;
+}
 
 interface UseEventInsightsProps {
   eventCode: string;
@@ -73,36 +114,54 @@ export function useEventInsightsManagement({
       if (response.success && response.data?.insights) {
         setInsights(response.data.insights);
         if (response.data.insights.recommendations && response.data.insights.recommendations.length > 0) {
-          setRecommendations(response.data.insights.recommendations.map((rec: any) => ({
-            id: rec.song?.id || `rec-${Date.now()}-${Math.random()}`,
-            name: rec.song?.name,
-            title: rec.song?.name,
-            artists: rec.song?.artists,
-            artist: Array.isArray(rec.song?.artists) ? rec.song.artists.join(', ') : rec.song?.artists?.[0] || 'Unknown Artist',
-            album: rec.song?.album || 'Unknown Album',
-            duration: utils.formatDuration((rec.song?.duration_ms || 180000)),
-            matchScore: Math.round(rec.averageScore || rec.song?.weight || 75),
-            guestCount: rec.guestCount || 1,
-            playlistCount: rec.playlistCount || Math.floor(Math.random() * 25) + 1,
-            crowdAffinity: rec.crowdAffinity || Math.floor(Math.random() * 40) + 60,
-            transitionSongs: rec.transitionSongs || [],
-            audioFeatures: rec.audioFeatures || {
-              danceability: rec.audioFeatures?.danceability || Math.random() * 0.4 + 0.6,
-              energy: rec.audioFeatures?.energy || Math.random() * 0.4 + 0.5,
-              valence: rec.audioFeatures?.valence || Math.random() * 0.6 + 0.3,
-              tempo: rec.audioFeatures?.tempo || Math.random() * 80 + 100
-            },
-            reasons: [
-              `${rec.guestCount || 1} guest${(rec.guestCount || 1) > 1 ? 's' : ''} love this`,
-              rec.averageScore > 80 ? 'High crowd match' : 'Good crowd match',
-              'AI recommended'
-            ],
-            energy: Math.round((rec.audioFeatures?.energy || 0.7) * 100),
-            danceability: Math.round((rec.audioFeatures?.danceability || 0.75) * 100),
-            source: 'ai' as const,
-            weight: rec.song?.weight,
-            popularity: rec.song?.popularity
-          })));
+          setRecommendations(response.data.insights.recommendations.map((rec: any, index: number) => {
+            const baseId = rec.song?.id || rec.id || `rec-${index}-${Date.now()}`;
+            const featureKey = rec.audioFeatures?.key;
+            const featureMode = rec.audioFeatures?.mode;
+            const audioFeatures = {
+              danceability: rec.audioFeatures?.danceability ?? (Math.random() * 0.4 + 0.6),
+              energy: rec.audioFeatures?.energy ?? (Math.random() * 0.4 + 0.5),
+              valence: rec.audioFeatures?.valence ?? (Math.random() * 0.6 + 0.3),
+              tempo: rec.audioFeatures?.tempo ?? rec.audioFeatures?.bpm ?? (Math.random() * 80 + 100),
+              key: typeof featureKey === 'number' ? featureKey : undefined,
+              mode: typeof featureMode === 'number' ? featureMode : undefined
+            };
+            const camelotKey =
+              camelotKeyFromAudio(audioFeatures.key ?? null, audioFeatures.mode ?? null) ||
+              (typeof rec.song?.camelotKey === 'string' ? rec.song.camelotKey : undefined) ||
+              (typeof rec.song?.key === 'string' ? rec.song.key : undefined) ||
+              generateCamelotKey(baseId);
+
+            return {
+              id: baseId,
+              name: rec.song?.name,
+              title: rec.song?.name,
+              artists: rec.song?.artists,
+              artist: Array.isArray(rec.song?.artists) ? rec.song.artists.join(', ') : rec.song?.artists?.[0] || 'Unknown Artist',
+              album: rec.song?.album || 'Unknown Album',
+              duration: utils.formatDuration((rec.song?.duration_ms || 180000)),
+              matchScore: Math.round(rec.averageScore || rec.song?.weight || 75),
+              guestCount: rec.guestCount || 1,
+              playlistCount: rec.playlistCount || Math.floor(Math.random() * 25) + 1,
+              crowdAffinity: rec.crowdAffinity || Math.floor(Math.random() * 40) + 60,
+              transitionSongs: rec.transitionSongs || [],
+              audioFeatures,
+              key: camelotKey,
+              reasons: [
+                `${rec.guestCount || 1} guest${(rec.guestCount || 1) > 1 ? 's' : ''} love this`,
+                rec.averageScore > 80 ? 'High crowd match' : 'Good crowd match',
+                'AI recommended'
+              ],
+              energy: Math.round((audioFeatures.energy || 0.7) * 100),
+              danceability: Math.round((audioFeatures.danceability || 0.75) * 100),
+              source: 'ai' as const,
+              weight: rec.song?.weight,
+              popularity: rec.song?.popularity,
+              previewUrl: getPreviewUrlFromRecommendation(rec),
+              previewStartMs: estimatePreviewStartMs(rec),
+              previewDurationMs: getPreviewDurationMs(rec),
+            };
+          }));
           console.log('✅ Loaded AI recommendations from backend:', response.data.insights.recommendations.length);
           setLoadingInsights(false);
           return;
@@ -185,10 +244,24 @@ export function useEventInsightsManagement({
     ];
     
     // Add keys to all recommendations
-    const recommendationsWithKeys = mockRecommendations.map(song => ({
-      ...song,
-      key: generateCamelotKey(song.id)
-    }));
+    const recommendationsWithKeys = mockRecommendations.map((song, index) => {
+      const numericKey = index % 12;
+      const mode = index % 2 === 0 ? 1 : 0;
+      const camelotKey = camelotKeyFromAudio(numericKey, mode) || generateCamelotKey(song.id);
+
+      return {
+        ...song,
+        key: camelotKey,
+        audioFeatures: {
+          energy: (song.energy ?? 70) / 100,
+          danceability: (song.danceability ?? 70) / 100,
+          valence: song.themeMatch ? Math.min(0.95, Math.max(0.05, song.themeMatch / 100)) : 0.6,
+          tempo: 110 + (index * 4) % 30,
+          key: numericKey,
+          mode
+        }
+      };
+    });
     
     // Sort by matchScore descending
     setRecommendations(recommendationsWithKeys.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0)));
